@@ -1,3 +1,12 @@
+---
+title: Video Agent Hero
+emoji: 🎬
+colorFrom: purple
+colorTo: blue
+sdk: docker
+pinned: false
+---
+
 # video-agent-hero 🎬
 
 An **Agentic Video Generator** — plan-first, interactive, memory-aware, brand-consistent.

@@ -41,6 +41,38 @@ _run_events: dict[str, list[dict]] = {}
 @app.on_event("startup")
 async def startup():
     deps.init()
+    # Auto-seed brand kit + user prefs so the app works out of the box
+    try:
+        from memory.schemas import (
+            BrandKit, UserPrefs, LogoConfig, ColorPalette, FontConfig,
+            SubtitleStyle, IntroOutro,
+        )
+        from scripts.create_assets import create_placeholder_logo
+        db = deps.db()
+        logo_path = create_placeholder_logo()
+        tong_sui = BrandKit(
+            brand_id="tong_sui", name="Tong Sui",
+            logo=LogoConfig(path=str(logo_path), safe_area="top_right"),
+            colors=ColorPalette(primary="#00B894", secondary="#FFFFFF",
+                                accent="#FF7675", background="#1A1A2E"),
+            fonts=FontConfig(title="Poppins-SemiBold", body="Inter-Regular"),
+            subtitle_style=SubtitleStyle(
+                position="bottom_center", box_opacity=0.55, box_radius=12,
+                padding_px=14, max_chars_per_line=18, highlight_keywords=True, font_size=44,
+            ),
+            intro_outro=IntroOutro(
+                intro_template="mint_splash", outro_cta="Order now",
+                intro_duration_sec=1.5, outro_duration_sec=2.0,
+            ),
+        )
+        db.upsert_brand_kit(tong_sui)
+        ej = UserPrefs(
+            user_id="ej", default_platform="tiktok", preferred_duration_sec=20,
+            tone=["fresh", "playful", "premium"], pacing="fast", shot_density=7, cta_style="soft",
+        )
+        db.upsert_user_prefs(ej)
+    except Exception as e:
+        print(f"[startup] brand kit seed skipped: {e}", flush=True)
 
 
 # ── Request models ────────────────────────────────────────────────────────────
