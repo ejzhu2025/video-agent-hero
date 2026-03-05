@@ -49,6 +49,13 @@ Rules:
 - Keep text_overlay short (max 8 words)
 - duration_sec should equal the sum of all shot durations
 
+CRITICAL — feedback / modification rules:
+- When the user says "modify scene N", "change scene N", "add X to scene N", or "scene N should show X":
+  ALWAYS edit the desc/type/text_overlay of that specific scene in place — do NOT insert a new scene
+- The total number of scenes must ALWAYS remain exactly 4 — never add or remove scenes
+- "Add X to scene N" means: update scene N's desc to include X, keep all other scenes unchanged
+- The last scene (scene 4) must always be type "text" (outro) — never replace it with a content scene
+
 CRITICAL — storyboard desc rules:
 - "desc" fields describe ONLY visual scene elements: motion, lighting, composition, colors, environment, camera angle, textures
 - NEVER mention text, captions, logos, watermarks, overlays, written words, taglines, slogans, or any on-screen graphics in desc
