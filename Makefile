@@ -1,4 +1,4 @@
-.PHONY: install init demo test clean lint
+.PHONY: install init demo test clean lint docker-build docker-run docker-stop docker-logs
 
 # ── Setup ──────────────────────────────────────────────────────────────────────
 install:
@@ -31,6 +31,19 @@ clean:
 
 clean-all: clean
 	rm -rf data/
+
+# ── Docker (mirrors HF Spaces environment) ─────────────────────────────────────
+docker-build:
+	docker compose build
+
+docker-run:
+	docker compose up
+
+docker-stop:
+	docker compose down
+
+docker-logs:
+	docker compose logs -f
 
 # ── Quick project commands ─────────────────────────────────────────────────────
 new-tong-sui:
