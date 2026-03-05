@@ -14,7 +14,12 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+# Load .env from project root, then from the persistent data volume (HF Spaces).
+# The data-volume copy takes precedence so user-saved keys survive container rebuilds.
 load_dotenv()
+_data_env = Path(os.environ.get("VAH_DATA_DIR", "./data")) / ".env"
+if _data_env.exists():
+    load_dotenv(_data_env, override=True)
 
 # Add project root to path so we can import agent.*
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -85,6 +90,7 @@ async def startup():
 class ApiKeyRequest(BaseModel):
     anthropic_api_key: str
     fal_key: str = ""
+    replicate_api_token: str = ""
 
 
 class CreateProjectRequest(BaseModel):
@@ -182,11 +188,14 @@ async def get_settings():
     """Return current settings (keys masked)."""
     ant_key = os.environ.get("ANTHROPIC_API_KEY", "")
     fal_key = os.environ.get("FAL_KEY", "") or os.environ.get("FAL_API_KEY", "")
+    rep_token = os.environ.get("REPLICATE_API_TOKEN", "")
     return {
         "anthropic_api_key_set": bool(ant_key),
         "anthropic_api_key_preview": _mask_key(ant_key),
         "fal_key_set": bool(fal_key),
         "fal_key_preview": _mask_key(fal_key),
+        "replicate_api_token_set": bool(rep_token),
+        "replicate_api_token_preview": _mask_key(rep_token),
     }
 
 
@@ -197,19 +206,27 @@ async def save_settings(req: ApiKeyRequest):
     fal_key = req.fal_key.strip()
     if not ant_key and not fal_key:
         raise HTTPException(status_code=400, detail="At least one API key must be provided")
-    env_path = Path(__file__).parent.parent / ".env"
+    # Save to persistent data volume so keys survive HF Spaces container rebuilds
+    data_dir = Path(os.environ.get("VAH_DATA_DIR", str(Path(__file__).parent.parent / "data")))
+    data_dir.mkdir(parents=True, exist_ok=True)
+    env_path = data_dir / ".env"
     updates: dict[str, str] = {}
+    replicate_token = req.replicate_api_token.strip()
     if ant_key:
         os.environ["ANTHROPIC_API_KEY"] = ant_key
         updates["ANTHROPIC_API_KEY"] = ant_key
     if fal_key:
         os.environ["FAL_KEY"] = fal_key
         updates["FAL_KEY"] = fal_key
+    if replicate_token:
+        os.environ["REPLICATE_API_TOKEN"] = replicate_token
+        updates["REPLICATE_API_TOKEN"] = replicate_token
     _upsert_env_file(env_path, updates)
     return {
         "status": "ok",
         "anthropic_preview": _mask_key(ant_key) if ant_key else None,
         "fal_preview": _mask_key(fal_key) if fal_key else None,
+        "replicate_preview": _mask_key(replicate_token) if replicate_token else None,
     }
 
 
@@ -824,7 +841,19 @@ _HTML = r"""<!DOCTYPE html>
       </div>
       <p id="fal-key-current" class="text-xs text-gray-600 mt-1.5"></p>
       <p class="text-xs text-gray-600 mt-1">
-        Used for T2V video generation. Without a key, PIL placeholder clips are used.
+        Used for T2V / I2V / FLUX video generation. Without a key, PIL placeholder clips are used.
+      </p>
+    </div>
+    <div class="mb-4">
+      <label class="text-sm text-gray-400 mb-2 block">Replicate API Token</label>
+      <div class="relative">
+        <input id="replicate-token-input" type="password" class="w-full text-sm p-2.5 pr-10 font-mono"
+          placeholder="r8_…" autocomplete="off"/>
+        <button onclick="toggleReplicateVisibility()" class="absolute right-2.5 top-2.5 text-gray-500 hover:text-gray-300 text-sm">👁</button>
+      </div>
+      <p id="replicate-token-current" class="text-xs text-gray-600 mt-1.5"></p>
+      <p class="text-xs text-gray-600 mt-1">
+        Used for background music generation (MusicGen). Without a token, music is skipped.
       </p>
     </div>
     <div class="flex gap-2">
@@ -2172,6 +2201,14 @@ async function openSettings() {
       falCur.textContent = 'Not set — PIL placeholder clips will be used';
       falCur.className = 'text-xs text-yellow-600 mt-1.5';
     }
+    const repCur = document.getElementById('replicate-token-current');
+    if (s.replicate_api_token_set) {
+      repCur.textContent = `Current: ${s.replicate_api_token_preview}`;
+      repCur.className = 'text-xs text-green-600 mt-1.5';
+    } else {
+      repCur.textContent = 'Not set — background music will be skipped';
+      repCur.className = 'text-xs text-yellow-600 mt-1.5';
+    }
   } catch (e) {}
   document.getElementById('settings-modal').classList.remove('hidden');
   document.getElementById('api-key-input').focus();
@@ -2181,6 +2218,7 @@ function closeSettings() {
   document.getElementById('settings-modal').classList.add('hidden');
   document.getElementById('api-key-input').value = '';
   document.getElementById('fal-key-input').value = '';
+  document.getElementById('replicate-token-input').value = '';
 }
 
 function toggleKeyVisibility() {
@@ -2193,15 +2231,22 @@ function toggleFalKeyVisibility() {
   input.type = input.type === 'password' ? 'text' : 'password';
 }
 
+function toggleReplicateVisibility() {
+  const input = document.getElementById('replicate-token-input');
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+
 async function saveApiKey() {
   const antKey = document.getElementById('api-key-input').value.trim();
   const falKey = document.getElementById('fal-key-input').value.trim();
-  if (!antKey && !falKey) { toast('Please enter at least one API key', 'error'); return; }
+  const repToken = document.getElementById('replicate-token-input').value.trim();
+  if (!antKey && !falKey && !repToken) { toast('Please enter at least one API key', 'error'); return; }
   try {
-    const res = await api('POST', '/api/settings', { anthropic_api_key: antKey, fal_key: falKey });
+    const res = await api('POST', '/api/settings', { anthropic_api_key: antKey, fal_key: falKey, replicate_api_token: repToken });
     const parts = [];
     if (res.anthropic_preview) parts.push(`Anthropic: ${res.anthropic_preview}`);
     if (res.fal_preview) parts.push(`fal.ai: ${res.fal_preview}`);
+    if (res.replicate_preview) parts.push(`Replicate: ${res.replicate_preview}`);
     toast(`Saved — ${parts.join(' | ')}`, 'success');
     closeSettings();
     updateApiStatus();
