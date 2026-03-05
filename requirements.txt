@@ -9,8 +9,8 @@ langchain-openai>=0.1.25
 pydantic>=2.7.0
 python-dotenv>=1.0.0
 
-# Memory
-chromadb>=0.5.5
+# Memory (chromadb is optional — VectorStore gracefully degrades without it)
+# chromadb>=0.5.5  # loads ~300MB ONNX model, causes OOM on HF Spaces free tier
 
 # CLI
 typer>=0.12.5
