@@ -119,9 +119,10 @@ def executor_pipeline(state: dict[str, Any]) -> dict[str, Any]:
                 shot_type = shot.get("type", "wide")
                 product_image_path = state.get("product_image_path", "")
 
-                # Use I2V for product/lifestyle shots when a product image is available.
-                # This eliminates AI-invented text/logos on the product — the real photo is used.
-                if shot_type in ("product", "lifestyle", "close", "macro") \
+                # Use I2V only for "product" type shots when a product image is available.
+                # macro/lifestyle/wide shots use T2V so the storyboard scene descriptions
+                # (different environments, ingredients, settings) are actually rendered.
+                if shot_type == "product" \
                         and product_image_path and Path(product_image_path).exists():
                     try:
                         from render.fal_i2v import generate_clip_from_image, build_shot_motion_prompt
