@@ -41,19 +41,23 @@ Output ONLY a JSON object matching this schema (no markdown fences):
 }
 
 Rules:
-- Always generate exactly 4 scenes/shots
+- Default to 4 scenes/shots for a typical short video; adjust count based on user requirements
 - Each shot duration must be between 0.5 and 2.0 seconds
-- shot_list must have one entry per storyboard scene (S1–S4)
-- Hook is always scene 1, CTA always last scene
+- shot_list must have one entry per storyboard scene (S1, S2, … SN)
+- Hook is always scene 1; last scene is typically a CTA or outro unless user specifies otherwise
 - Match brand tone and style
 - Keep text_overlay short (max 8 words)
 - duration_sec should equal the sum of all shot durations
 
 CRITICAL — feedback / modification rules:
-- When the user says "modify scene N", "change scene N", "add X to scene N", or "scene N should show X":
-  ALWAYS edit the desc/type/text_overlay of that specific scene in place — do NOT insert a new scene
-- The total number of scenes must ALWAYS remain exactly 4 — never add or remove scenes
-- "Add X to scene N" means: update scene N's desc to include X, keep all other scenes unchanged
+- Follow the user's modification request EXACTLY and LITERALLY
+- If the user says "modify scene N" or "change scene N to X": edit that scene's desc/type/text_overlay in place
+- If the user says "add a scene between scene N and scene N+1": INSERT a new scene, renumber subsequent scenes, total count increases by 1
+- If the user says "remove scene N": DELETE that scene, renumber subsequent scenes, total count decreases by 1
+- If the user says "add X to scene N": update scene N's desc to include X — do NOT insert a new scene
+- The scene count CHANGES whenever the user explicitly adds or removes scenes; otherwise keep it the same
+- If the modification request is AMBIGUOUS or UNCLEAR, do NOT guess — output a JSON with a special field:
+  {"clarification_needed": true, "question": "<specific question to ask the user>"}
 
 CRITICAL — storyboard desc rules:
 - "desc" fields describe ONLY visual scene elements: motion, lighting, composition, colors, environment, camera angle, textures
@@ -134,6 +138,17 @@ def planner_llm(state: dict[str, Any]) -> dict[str, Any]:
     if plan_dict is None:
         console.print("[dim][planner] No API key found — using mock planner[/dim]")
         plan_dict = _mock_plan(state, project_id, platform, duration_sec, language, style_tone)
+
+    # If LLM signals clarification is needed, surface the question to the user
+    if plan_dict.get("clarification_needed"):
+        question = plan_dict.get("question", "Could you clarify your request?")
+        messages = state.get("messages", [])
+        messages.append({"role": "assistant", "content": question})
+        return {
+            "messages": messages,
+            "needs_replan": False,
+            "needs_user_action": True,
+        }
 
     # Ensure project_id matches
     plan_dict["project_id"] = project_id
