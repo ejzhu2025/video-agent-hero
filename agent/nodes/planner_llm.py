@@ -61,8 +61,9 @@ CRITICAL — storyboard desc rules:
 - NEVER use words like: "text appears", "logo shown", "caption", "title card", "CTA", "branded graphic", "overlay", "tagline", "branded cup", "branded bottle", "branding"
 - NEVER use the word "branded" — say "product cup", "product bottle", "the drink" instead
 - Text content belongs EXCLUSIVELY in "text_overlay" fields, never in "desc"
-- Last shot type must always be "text" (outro brand card rendered with PIL, not AI video)
-- For "text" type shots, desc should describe an abstract visual background only (colors, mood, bokeh)
+- An outro (type "text") is optional — only include one if the user explicitly wants a brand card
+- If included, "text" type shots must have desc describing an abstract visual background only (colors, mood, bokeh)
+- shot_list must correspond 1-to-1 with storyboard scenes — no extra shots, no missing shots
 """
 
 PLANNER_USER_TEMPLATE = """Brief: {brief}
