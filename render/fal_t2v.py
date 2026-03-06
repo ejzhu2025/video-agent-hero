@@ -1,10 +1,14 @@
 """fal.ai T2V wrapper — supports turbo (1.3B) and hd (14B) quality tiers."""
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 
 import fal_client
 import httpx
+
+# fal_client.run() has no built-in timeout — wrap all calls with this limit (seconds)
+FAL_CALL_TIMEOUT = 300  # 5 minutes per clip
 
 # ── Prompt sanitiser — prevent content-policy false-positives ─────────────────
 # fal.ai's content checker flags food/cooking words that look violent out of context.
@@ -80,8 +84,8 @@ def generate_clip(
 
 def _call_t2v(preset: dict, prompt: str, neg: str, reraise: bool = False) -> str | None:
     """Single T2V call. Returns URL or None on content_policy_violation."""
-    try:
-        result = fal_client.run(
+    def _run():
+        return fal_client.run(
             preset["model"],
             arguments={
                 "prompt": prompt,
@@ -92,6 +96,17 @@ def _call_t2v(preset: dict, prompt: str, neg: str, reraise: bool = False) -> str
                 "aspect_ratio": "9:16",
             },
         )
+
+    try:
+        with ThreadPoolExecutor(max_workers=1) as ex:
+            future = ex.submit(_run)
+            try:
+                result = future.result(timeout=FAL_CALL_TIMEOUT)
+            except FuturesTimeoutError:
+                raise TimeoutError(
+                    f"fal.ai T2V timed out after {FAL_CALL_TIMEOUT}s — "
+                    "queue may be overloaded, try again later"
+                )
         if "video" in result:
             return result["video"]["url"]
         if "videos" in result and result["videos"]:

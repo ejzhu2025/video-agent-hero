@@ -1,10 +1,13 @@
 """fal.ai T2I wrapper — FLUX Schnell background + FLUX Kontext product ad frames."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 
 import fal_client
 import httpx
+
+FAL_CALL_TIMEOUT = 120  # 2 minutes (T2I is faster than T2V)
 
 
 def generate_ad_frame(
@@ -22,17 +25,25 @@ def generate_ad_frame(
     # Upload product image to fal.ai CDN so the API can access it
     image_url = fal_client.upload_file(product_image_path)
 
-    result = fal_client.run(
-        "fal-ai/flux-pro/kontext",
-        arguments={
-            "prompt": prompt,
-            "image_url": image_url,
-            "image_size": {"width": width, "height": height},
-            "num_inference_steps": 28,
-            "guidance_scale": 3.5,
-            "output_format": "png",
-        },
-    )
+    def _run_kontext():
+        return fal_client.run(
+            "fal-ai/flux-pro/kontext",
+            arguments={
+                "prompt": prompt,
+                "image_url": image_url,
+                "image_size": {"width": width, "height": height},
+                "num_inference_steps": 28,
+                "guidance_scale": 3.5,
+                "output_format": "png",
+            },
+        )
+
+    with ThreadPoolExecutor(max_workers=1) as ex:
+        future = ex.submit(_run_kontext)
+        try:
+            result = future.result(timeout=FAL_CALL_TIMEOUT)
+        except FuturesTimeoutError:
+            raise TimeoutError(f"fal.ai FLUX Kontext timed out after {FAL_CALL_TIMEOUT}s")
     url = result["images"][0]["url"]
     with httpx.Client(timeout=120, follow_redirects=True) as client:
         resp = client.get(url)
@@ -86,16 +97,24 @@ def generate_background(
     height: int = 1920,
 ) -> str:
     """Generate a background image via FLUX Schnell. Returns output_path."""
-    result = fal_client.run(
-        "fal-ai/flux/schnell",
-        arguments={
-            "prompt": prompt,
-            "image_size": {"width": width, "height": height},
-            "num_inference_steps": 4,
-            "num_images": 1,
-            "enable_safety_checker": False,
-        },
-    )
+    def _run_schnell():
+        return fal_client.run(
+            "fal-ai/flux/schnell",
+            arguments={
+                "prompt": prompt,
+                "image_size": {"width": width, "height": height},
+                "num_inference_steps": 4,
+                "num_images": 1,
+                "enable_safety_checker": False,
+            },
+        )
+
+    with ThreadPoolExecutor(max_workers=1) as ex:
+        future = ex.submit(_run_schnell)
+        try:
+            result = future.result(timeout=FAL_CALL_TIMEOUT)
+        except FuturesTimeoutError:
+            raise TimeoutError(f"fal.ai FLUX Schnell timed out after {FAL_CALL_TIMEOUT}s")
     url = result["images"][0]["url"]
     with httpx.Client(timeout=60, follow_redirects=True) as client:
         resp = client.get(url)

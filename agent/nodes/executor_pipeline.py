@@ -53,71 +53,74 @@ def executor_pipeline(state: dict[str, Any]) -> dict[str, Any]:
                 shot_id = shot["shot_id"]
                 duration = float(shot.get("duration", 3.5))
                 clip_path = str(work_dir / f"{shot_id}.mp4")
+                is_outro = (i == len(shot_list) - 1)
+                product_image_path = state.get("product_image_path", "")
+                logo_path = brand_kit.get("logo", {}).get("path", "")
+                # CTA text: prefer shot text_overlay, fall back to plan script CTA
+                cta_text = (
+                    shot.get("text_overlay", "")
+                    or plan.get("script", {}).get("cta", "")
+                )
 
-                if shot.get("type") == "text":
-                    from render.fal_t2i import generate_background, build_background_prompt
+                # ── Priority 1: Outro + product image → FLUX Kontext ad poster + I2V ──
+                # Applies regardless of shot type — ensures the last frame always
+                # features the real product when the user has uploaded a photo.
+                if is_outro and product_image_path and Path(product_image_path).exists():
+                    from render.fal_t2i import generate_ad_frame, build_ad_prompt
                     from render.fal_i2v import generate_clip_from_image, build_outro_motion_prompt
-                    is_outro = (i == len(shot_list) - 1)
-                    product_image_path = state.get("product_image_path", "")
-                    logo_path = brand_kit.get("logo", {}).get("path", "")
-                    cta_text = shot.get("text_overlay", "")
-
-                    if is_outro and product_image_path and Path(product_image_path).exists():
-                        # Best path: FLUX Kontext → ad poster with integrated CTA/brand →
-                        #            Wan I2V → subtle animated clip (no overlay sticker)
-                        try:
-                            from render.fal_t2i import generate_ad_frame, build_ad_prompt
-                            ad_img_path = str(work_dir / f"{shot_id}_ad.png")
-                            ad_prompt = build_ad_prompt(
-                                brand_kit,
-                                brief=state.get("brief", ""),
-                                cta_text=cta_text,
-                            )
-                            generate_ad_frame(product_image_path, ad_prompt, ad_img_path)
-
-                            # Animate the ad poster with subtle I2V motion
-                            motion_prompt = build_outro_motion_prompt(brand_kit, brief=state.get("brief", ""))
-                            raw_i2v_path = str(work_dir / f"{shot_id}_i2v_raw.mp4")
-                            generate_clip_from_image(ad_img_path, motion_prompt, raw_i2v_path, quality=quality)
-                            fc.trim_and_scale_clip(raw_i2v_path, clip_path, duration=duration)
-                        except Exception as e:
-                            import sys
-                            print(f"[executor] FLUX Kontext + I2V outro failed: {e} — falling back to PIL", file=sys.stderr)
-                            fg = FrameGenerator(brand_kit=brand_kit, work_dir=work_dir)
-                            frame_path = fg.generate_frame(
-                                shot_id=shot_id, shot_type="text",
-                                text_overlay=cta_text, scene_index=i,
-                                is_outro=True, logo_path=logo_path,
-                            )
-                            fc.image_to_clip(str(frame_path), clip_path, duration=duration,
-                                             width=1080, height=1920, ken_burns=False)
-                    else:
-                        # Non-outro text shots or no product image: FLUX Schnell background + PIL compose
-                        bg_path = str(work_dir / f"{shot_id}_bg.png")
-                        try:
-                            bg_prompt = build_background_prompt(brand_kit, is_outro=is_outro)
-                            generate_background(bg_prompt, bg_path)
-                        except Exception as e:
-                            import sys
-                            print(f"[executor] FLUX bg failed: {e} — using PIL gradient", file=sys.stderr)
-                            bg_path = ""
-
+                    try:
+                        ad_img_path = str(work_dir / f"{shot_id}_ad.png")
+                        ad_prompt = build_ad_prompt(
+                            brand_kit,
+                            brief=state.get("brief", ""),
+                            cta_text=cta_text,
+                        )
+                        generate_ad_frame(product_image_path, ad_prompt, ad_img_path)
+                        motion_prompt = build_outro_motion_prompt(brand_kit, brief=state.get("brief", ""))
+                        raw_i2v_path = str(work_dir / f"{shot_id}_i2v_raw.mp4")
+                        generate_clip_from_image(ad_img_path, motion_prompt, raw_i2v_path, quality=quality)
+                        fc.trim_and_scale_clip(raw_i2v_path, clip_path, duration=duration)
+                        return {"shot_id": shot_id, "clip_path": clip_path, "duration": duration}
+                    except Exception as e:
+                        import sys
+                        print(f"[executor] FLUX Kontext + I2V outro failed: {e} — falling back to PIL", file=sys.stderr)
                         fg = FrameGenerator(brand_kit=brand_kit, work_dir=work_dir)
                         frame_path = fg.generate_frame(
                             shot_id=shot_id, shot_type="text",
                             text_overlay=cta_text, scene_index=i,
-                            is_outro=is_outro,
-                            background_image_path=bg_path,
-                            logo_path=logo_path if is_outro else "",
+                            is_outro=True, logo_path=logo_path,
                         )
                         fc.image_to_clip(str(frame_path), clip_path, duration=duration,
                                          width=1080, height=1920, ken_burns=False)
+                        return {"shot_id": shot_id, "clip_path": clip_path, "duration": duration}
+
+                # ── Priority 2: Text-type shots (non-outro, or outro without product image) ──
+                if shot.get("type") == "text":
+                    from render.fal_t2i import generate_background, build_background_prompt
+                    bg_path = str(work_dir / f"{shot_id}_bg.png")
+                    try:
+                        bg_prompt = build_background_prompt(brand_kit, is_outro=is_outro)
+                        generate_background(bg_prompt, bg_path)
+                    except Exception as e:
+                        import sys
+                        print(f"[executor] FLUX bg failed: {e} — using PIL gradient", file=sys.stderr)
+                        bg_path = ""
+
+                    fg = FrameGenerator(brand_kit=brand_kit, work_dir=work_dir)
+                    frame_path = fg.generate_frame(
+                        shot_id=shot_id, shot_type="text",
+                        text_overlay=cta_text, scene_index=i,
+                        is_outro=is_outro,
+                        background_image_path=bg_path,
+                        logo_path=logo_path if is_outro else "",
+                    )
+                    fc.image_to_clip(str(frame_path), clip_path, duration=duration,
+                                     width=1080, height=1920, ken_burns=False)
                     return {"shot_id": shot_id, "clip_path": clip_path, "duration": duration}
 
                 scene = storyboard[i] if i < len(storyboard) else {}
                 desc = scene.get("desc") or "cinematic product shot"
                 shot_type = shot.get("type", "wide")
-                product_image_path = state.get("product_image_path", "")
 
                 # Use I2V only for "product" type shots when a product image is available.
                 # macro/lifestyle/wide shots use T2V so the storyboard scene descriptions

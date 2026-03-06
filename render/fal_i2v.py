@@ -1,10 +1,13 @@
 """fal.ai I2V wrapper — animate a product photo into a short video clip."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 
 import fal_client
 import httpx
+
+FAL_CALL_TIMEOUT = 300  # 5 minutes
 
 # Quality presets matching T2V conventions
 _PRESETS = {
@@ -25,17 +28,27 @@ def generate_clip_from_image(
     # Upload local image to fal.ai CDN so the API can access it
     image_url = fal_client.upload_file(image_path)
 
-    result = fal_client.run(
-        "fal-ai/wan/v2.2-a14b/image-to-video",
-        arguments={
-            "image_url": image_url,
-            "prompt": motion_prompt,
-            "num_frames": preset["num_frames"],
-            "frames_per_second": 16,
-            "resolution": preset["resolution"],
-            "aspect_ratio": "9:16",
-        },
-    )
+    def _run():
+        return fal_client.run(
+            "fal-ai/wan/v2.2-a14b/image-to-video",
+            arguments={
+                "image_url": image_url,
+                "prompt": motion_prompt,
+                "num_frames": preset["num_frames"],
+                "frames_per_second": 16,
+                "resolution": preset["resolution"],
+                "aspect_ratio": "9:16",
+            },
+        )
+
+    with ThreadPoolExecutor(max_workers=1) as ex:
+        future = ex.submit(_run)
+        try:
+            result = future.result(timeout=FAL_CALL_TIMEOUT)
+        except FuturesTimeoutError:
+            raise TimeoutError(
+                f"fal.ai I2V timed out after {FAL_CALL_TIMEOUT}s"
+            )
 
     if "video" in result:
         url = result["video"]["url"]
