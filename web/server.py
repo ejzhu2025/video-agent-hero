@@ -793,6 +793,21 @@ _HTML = r"""<!DOCTYPE html>
 <body class="h-screen flex flex-col overflow-hidden">
 
 <!-- Header -->
+<div id="update-banner" class="w-full bg-indigo-950 border-b border-indigo-800 px-5 py-1.5 flex items-center justify-between text-xs text-indigo-300">
+  <div class="flex items-center gap-3 overflow-hidden">
+    <span class="shrink-0 font-semibold text-indigo-400">What's new</span>
+    <div id="update-entries" class="flex items-center gap-4 overflow-x-auto whitespace-nowrap" style="scrollbar-width:none;-ms-overflow-style:none;">
+      <span class="text-indigo-500">2026-03-06</span><span>Outro product display fix — uploaded photo now always shown in last frame</span>
+      <span class="mx-1 text-indigo-700">·</span>
+      <span class="text-indigo-500">2026-03-06</span><span>Relevance re-render loop — low-score shots auto-retry with enhanced prompt</span>
+      <span class="mx-1 text-indigo-700">·</span>
+      <span class="text-indigo-500">2026-03-06</span><span>fal.ai 5-min timeout guard — no more infinite hangs</span>
+      <span class="mx-1 text-indigo-700">·</span>
+      <span class="text-indigo-500">2026-03-06</span><span>VLM quality gate — each shot scored against storyboard description</span>
+    </div>
+  </div>
+  <button onclick="document.getElementById('update-banner').remove()" class="ml-3 shrink-0 text-indigo-600 hover:text-indigo-300">✕</button>
+</div>
 <header class="flex items-center justify-between px-5 py-3 border-b border-gray-800 flex-shrink-0">
   <div class="flex items-center gap-3">
     <span class="text-xl">🎬</span>
