@@ -138,16 +138,27 @@ def executor_pipeline(state: dict[str, Any]) -> dict[str, Any]:
                         print(f"[executor] I2V shot failed: {e} — falling back to T2V", file=sys.stderr)
 
                 # Default: T2V for non-product shots or when no product image is available
-                tone_str = ", ".join(style_tone) if isinstance(style_tone, list) else str(style_tone)
-                clean_desc = desc.replace("branded ", "").replace("brand ", "")
-                prompt = (
-                    f"{clean_desc}. Style: {tone_str}. "
-                    "Vertical social media video, smooth motion, vibrant colors, cinematic quality. "
-                    "No text overlays, no captions, no watermarks, no on-screen text, "
-                    "no visible labels or writing on products, plain unbranded surfaces."
-                )
+                # Use pre-compiled prompt from PromptCompiler if available
+                t2v_prompts = state.get("t2v_prompts", {})
+                compiled = t2v_prompts.get(shot_id, "")
+                negative_prompt = ""
+                if isinstance(compiled, dict):
+                    # New format: {positive, negative}
+                    prompt = compiled.get("positive", "")
+                    negative_prompt = compiled.get("negative", "")
+                elif isinstance(compiled, str) and compiled:
+                    prompt = compiled
+                else:
+                    tone_str = ", ".join(style_tone) if isinstance(style_tone, list) else str(style_tone)
+                    clean_desc = desc.replace("branded ", "").replace("brand ", "")
+                    prompt = (
+                        f"{clean_desc}. Style: {tone_str}. "
+                        "Vertical social media video, smooth motion, vibrant colors, cinematic quality. "
+                        "No text overlays, no captions, no watermarks, no on-screen text, "
+                        "no visible labels or writing on products, plain unbranded surfaces."
+                    )
                 raw_path = str(work_dir / f"{shot_id}_raw.mp4")
-                generate_clip(prompt, raw_path, duration=duration, quality=quality)
+                generate_clip(prompt, raw_path, duration=duration, quality=quality, negative_prompt=negative_prompt)
                 fc.trim_and_scale_clip(raw_path, clip_path, duration=duration)
                 return {"shot_id": shot_id, "clip_path": clip_path, "duration": duration}
 

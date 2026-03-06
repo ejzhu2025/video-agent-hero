@@ -1,9 +1,33 @@
 """fal.ai T2V wrapper — supports turbo (1.3B) and hd (14B) quality tiers."""
 import os
+import re
 from pathlib import Path
 
 import fal_client
 import httpx
+
+# ── Prompt sanitiser — prevent content-policy false-positives ─────────────────
+# fal.ai's content checker flags food/cooking words that look violent out of context.
+_SANITIZE_RULES = [
+    # "flesh" in food context → "pulp" / "fruit interior"
+    (r"\b(vivid\s+\w+\s+)?flesh\b", "pulp"),
+    # "blade" near food → "knife edge"
+    (r"\bblade\s+(slicing|cutting|entering)\b", "knife cutting"),
+    (r"\bslicing\s+through\b", "cutting through"),
+    # "burst" of juice can look violent — soften
+    (r"\bjuice\s+droplets\s+burst\b", "juice droplets spray"),
+    # "crack open" / "cracks open"
+    (r"\bcracks?\s+open\b", "splits open"),
+    # "wipe" as a film transition is fine, but "split-screen wipe cracks" is flagged
+    (r"\bsplit-screen\s+wipe\s+cracks\b", "split-screen wipe reveals"),
+]
+
+
+def _sanitize_prompt(prompt: str) -> str:
+    """Replace known content-policy trigger patterns with food-safe equivalents."""
+    for pattern, replacement in _SANITIZE_RULES:
+        prompt = re.sub(pattern, replacement, prompt, flags=re.IGNORECASE)
+    return prompt
 
 # Quality presets — both use wan/v2.2-a14b, turbo uses fewer frames for speed
 _QUALITY_PRESETS = {
@@ -20,15 +44,48 @@ _QUALITY_PRESETS = {
 }
 
 
-def generate_clip(prompt: str, output_path: str, duration: float = 3.5, quality: str = "turbo") -> str:
+_DEFAULT_NEGATIVE = (
+    "text on screen, captions, subtitles, watermark, logo, blurry, low quality, "
+    "distorted proportions, unnatural motion, CGI artifacts, overexposed, flat lighting"
+)
+
+
+def generate_clip(
+    prompt: str,
+    output_path: str,
+    duration: float = 3.5,
+    quality: str = "turbo",
+    negative_prompt: str = "",
+) -> str:
     """Call T2V, download result to output_path. quality='turbo'|'hd'."""
     preset = _QUALITY_PRESETS.get(quality, _QUALITY_PRESETS["turbo"])
-    url = None
+    neg = negative_prompt or _DEFAULT_NEGATIVE
+
+    # Always sanitise before sending
+    clean_prompt = _sanitize_prompt(prompt)
+
+    url = _call_t2v(preset, clean_prompt, neg)
+    if url is None:
+        # Retry once with a stripped-down fallback prompt on content policy errors
+        fallback = _make_fallback_prompt(clean_prompt)
+        print(f"[fal_t2v] Retrying with fallback prompt: {fallback[:80]}…")
+        url = _call_t2v(preset, fallback, neg, reraise=True)
+
+    with httpx.Client(timeout=180, follow_redirects=True) as client:
+        resp = client.get(url)
+        resp.raise_for_status()
+        Path(output_path).write_bytes(resp.content)
+    return output_path
+
+
+def _call_t2v(preset: dict, prompt: str, neg: str, reraise: bool = False) -> str | None:
+    """Single T2V call. Returns URL or None on content_policy_violation."""
     try:
         result = fal_client.run(
             preset["model"],
             arguments={
                 "prompt": prompt,
+                "negative_prompt": neg,
                 "num_frames": preset["num_frames"],
                 "frames_per_second": 16,
                 "resolution": preset["resolution"],
@@ -36,23 +93,27 @@ def generate_clip(prompt: str, output_path: str, duration: float = 3.5, quality:
             },
         )
         if "video" in result:
-            url = result["video"]["url"]
-        elif "videos" in result and result["videos"]:
-            url = result["videos"][0]["url"]
-        else:
-            raise ValueError(f"Unexpected T2V response: {list(result.keys())}")
+            return result["video"]["url"]
+        if "videos" in result and result["videos"]:
+            return result["videos"][0]["url"]
+        raise ValueError(f"Unexpected T2V response: {list(result.keys())}")
     except Exception as e:
-        # fal.ai interpolation sometimes fails after the base video is generated.
-        # Extract the original video URL from the error message if present.
-        import re
-        match = re.search(r'https://fal\.media/files/[^\s\'"]+\.mp4', str(e))
+        err_str = str(e)
+        # Extract video URL from interpolation errors (fal sometimes errors after generating)
+        match = re.search(r'https://fal\.media/files/[^\s\'"]+\.mp4', err_str)
         if match:
-            url = match.group(0)
-        else:
-            raise
+            return match.group(0)
+        if "content_policy_violation" in err_str:
+            if reraise:
+                raise
+            return None  # caller will retry with fallback
+        raise
 
-    with httpx.Client(timeout=180, follow_redirects=True) as client:
-        resp = client.get(url)
-        resp.raise_for_status()
-        Path(output_path).write_bytes(resp.content)
-    return output_path
+
+def _make_fallback_prompt(prompt: str) -> str:
+    """Strip the first sentence (usually the most descriptive / risky) and keep the style tail."""
+    sentences = [s.strip() for s in prompt.split(".") if s.strip()]
+    # Drop the first sentence (subject action), keep style + safety sentences
+    safe = ". ".join(sentences[1:]) if len(sentences) > 1 else prompt
+    # Ensure it still has a basic subject
+    return f"Product shot. {safe}"

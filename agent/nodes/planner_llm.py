@@ -1,4 +1,4 @@
-"""planner_llm — produce Plan JSON via LLM or deterministic mock."""
+"""planner_llm — orchestrate creative pipeline (Director→Storyboard→Critic→Compiler)."""
 from __future__ import annotations
 
 import json
@@ -7,11 +7,10 @@ import uuid
 from typing import Any
 
 from rich.console import Console
-from rich.spinner import Spinner
 
 console = Console()
 
-# ── Prompt template ───────────────────────────────────────────────────────────
+# ── Keep PLANNER_SYSTEM for backward compat (used by tests) ───────────────────
 
 PLANNER_SYSTEM = """You are an expert short-form video script writer and director.
 Given a brief, brand kit, and user preferences, produce a complete video plan as valid JSON.
@@ -70,76 +69,19 @@ CRITICAL — storyboard desc rules:
 - shot_list must correspond 1-to-1 with storyboard scenes — no extra shots, no missing shots
 """
 
-PLANNER_USER_TEMPLATE = """Brief: {brief}
-Brand: {brand_name}, primary color: {primary_color}, CTA: "{outro_cta}"
-Platform: {platform}, Duration: {duration_sec}s, Language: {language}
-Tone: {style_tone}
-User feedback / modification request: {feedback}
-Similar past projects (for reference): {similar_projects}
-{existing_plan_block}
-Generate the plan JSON now."""
-
 
 def planner_llm(state: dict[str, Any]) -> dict[str, Any]:
-    answers = state.get("clarification_answers", {})
-    brand_kit = state.get("brand_kit", {})
     project_id = state.get("project_id", str(uuid.uuid4())[:8])
-    feedback = state.get("plan_feedback", "")
-    similar = state.get("similar_projects", [])
 
-    platform = answers.get("platform", "tiktok")
-    duration_sec = int(answers.get("duration_sec", 20))
-    language = answers.get("language", "en")
-    style_tone = answers.get("style_tone", ["fresh"])
-    if isinstance(style_tone, str):
-        style_tone = [style_tone]
+    # Build LLM call function
+    llm_call = _build_llm_call()
 
-    similar_str = json.dumps([s.get("document", "") for s in similar[:2]], ensure_ascii=False)
+    # Import pipeline
+    from agent.nodes.creative_pipeline import run_creative_pipeline
 
-    existing_plan = state.get("plan")
-    if feedback and existing_plan:
-        existing_plan_block = (
-            f"Current plan to modify (apply the feedback above to THIS plan):\n"
-            f"{json.dumps(existing_plan, ensure_ascii=False, indent=2)}"
-        )
-    else:
-        existing_plan_block = ""
+    concept, plan_dict, prompts = run_creative_pipeline(state, project_id, llm_call)
 
-    user_msg = PLANNER_USER_TEMPLATE.format(
-        brief=state.get("brief", ""),
-        brand_name=brand_kit.get("name", brand_kit.get("brand_id", "Brand")),
-        primary_color=brand_kit.get("colors", {}).get("primary", "#00B894"),
-        outro_cta=brand_kit.get("intro_outro", {}).get("outro_cta", "Order now"),
-        platform=platform,
-        duration_sec=duration_sec,
-        language=language,
-        style_tone=", ".join(style_tone) if isinstance(style_tone, list) else style_tone,
-        feedback=feedback or "None",
-        similar_projects=similar_str,
-        existing_plan_block=existing_plan_block,
-    )
-
-    plan_dict: dict[str, Any] | None = None
-
-    # Try LLM first
-    api_key_anthropic = os.getenv("ANTHROPIC_API_KEY")
-    api_key_openai = os.getenv("OPENAI_API_KEY")
-
-    if api_key_anthropic:
-        plan_dict = _call_anthropic(user_msg, project_id)
-    elif api_key_openai:
-        plan_dict = _call_openai(user_msg, project_id)
-    else:
-        # Try Claude via claude-sonnet-4-6 even without explicit API key
-        # (works when ANTHROPIC_API_KEY is set in env or .env)
-        pass
-
-    # Fallback to mock
-    if plan_dict is None:
-        console.print("[dim][planner] No API key found — using mock planner[/dim]")
-        plan_dict = _mock_plan(state, project_id, platform, duration_sec, language, style_tone)
-
-    # If LLM signals clarification is needed, surface the question to the user
+    # If storyboard signals clarification needed
     if plan_dict.get("clarification_needed"):
         question = plan_dict.get("question", "Could you clarify your request?")
         messages = state.get("messages", [])
@@ -150,56 +92,88 @@ def planner_llm(state: dict[str, Any]) -> dict[str, Any]:
             "needs_user_action": True,
         }
 
-    # Ensure project_id matches
+    # Ensure plan fields
     plan_dict["project_id"] = project_id
     plan_dict["brief"] = state.get("brief", "")
 
     plan_version = state.get("plan_version", 0) + 1
-
     messages = state.get("messages", [])
-    messages.append({"role": "assistant", "content": f"[planner_llm] plan v{plan_version} ready, {len(plan_dict.get('shot_list', []))} shots"})
+    messages.append({
+        "role": "assistant",
+        "content": f"[planner_llm] plan v{plan_version} ready, {len(plan_dict.get('shot_list', []))} shots",
+    })
 
-    return {
+    result: dict[str, Any] = {
         "plan": plan_dict,
         "plan_version": plan_version,
         "needs_replan": False,
         "messages": messages,
+        "creative_concept": concept,
     }
+    if prompts:
+        result["t2v_prompts"] = prompts
+
+    return result
 
 
-# ── LLM backends ──────────────────────────────────────────────────────────────
+# ── LLM backend factory ────────────────────────────────────────────────────────
 
-def _call_anthropic(user_msg: str, project_id: str) -> dict | None:
+
+def _build_llm_call():
+    """Return a (system, user) -> str callable using the best available LLM."""
+    api_key_anthropic = os.getenv("ANTHROPIC_API_KEY")
+    api_key_openai = os.getenv("OPENAI_API_KEY")
+
+    if api_key_anthropic:
+        return _make_anthropic_call()
+    elif api_key_openai:
+        return _make_openai_call()
+    else:
+        console.print("[dim][planner] No API key — using mock planner[/dim]")
+        return _mock_llm_call
+
+
+def _make_anthropic_call():
     try:
         from langchain_anthropic import ChatAnthropic
         from langchain_core.messages import HumanMessage, SystemMessage
 
-        llm = ChatAnthropic(model="claude-sonnet-4-6", max_tokens=2048)  # type: ignore[call-arg]
-        with console.status("[cyan]Calling Claude to generate plan…[/cyan]"):
-            response = llm.invoke([SystemMessage(content=PLANNER_SYSTEM), HumanMessage(content=user_msg)])
-        raw = response.content if hasattr(response, "content") else str(response)
-        return json.loads(raw)
+        llm = ChatAnthropic(model="claude-sonnet-4-6", max_tokens=8192)  # type: ignore[call-arg]
+
+        def call(system: str, user: str) -> str:
+            response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
+            return response.content if hasattr(response, "content") else str(response)
+
+        return call
     except Exception as e:
-        console.print(f"[yellow][planner] Anthropic error: {e}[/yellow]")
-        return None
+        console.print(f"[yellow][planner] Anthropic init error: {e}[/yellow]")
+        return _mock_llm_call
 
 
-def _call_openai(user_msg: str, project_id: str) -> dict | None:
+def _make_openai_call():
     try:
         from langchain_openai import ChatOpenAI
         from langchain_core.messages import HumanMessage, SystemMessage
 
-        llm = ChatOpenAI(model="gpt-4o", max_tokens=2048, response_format={"type": "json_object"})
-        with console.status("[cyan]Calling GPT-4o to generate plan…[/cyan]"):
-            response = llm.invoke([SystemMessage(content=PLANNER_SYSTEM), HumanMessage(content=user_msg)])
-        raw = response.content if hasattr(response, "content") else str(response)
-        return json.loads(raw)
+        llm = ChatOpenAI(model="gpt-4o", max_tokens=8192, response_format={"type": "json_object"})
+
+        def call(system: str, user: str) -> str:
+            response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
+            return response.content if hasattr(response, "content") else str(response)
+
+        return call
     except Exception as e:
-        console.print(f"[yellow][planner] OpenAI error: {e}[/yellow]")
-        return None
+        console.print(f"[yellow][planner] OpenAI init error: {e}[/yellow]")
+        return _mock_llm_call
+
+
+def _mock_llm_call(system: str, user: str) -> str:
+    """Fallback: returns empty JSON so each step falls through to its own mock."""
+    return "{}"
 
 
 # ── Mock planner (deterministic for Tong Sui demo) ────────────────────────────
+
 
 def _mock_plan(
     state: dict,
@@ -237,14 +211,13 @@ def _mock_plan(
             cta_text,
         ]
 
-    # 4 shots, trim durations 0.5–2s each
     scene_descs = [
         ("Macro shot of coconut and watermelon slices with water droplets, vibrant colors, studio lighting", "macro"),
         ("Product bottle center frame, clean vibrant background, slow rotation, cinematic lighting", "product"),
         ("Lifestyle shot, someone holding the drink at a summer poolside, golden hour lighting", "lifestyle"),
-        ("Abstract brand background, deep green and dark tones, soft bokeh, elegant minimal", "text"),
+        ("Abstract background, deep green and dark tones, soft bokeh, elegant minimal", "text"),
     ]
-    trim_durations = [1.5, 1.0, 2.0, 1.0]  # total 5.5s
+    trim_durations = [1.5, 1.0, 2.0, 1.0]
 
     storyboard = []
     shot_list = []

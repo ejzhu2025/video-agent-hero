@@ -26,6 +26,8 @@ class AgentState(TypedDict, total=False):
     plan: dict[str, Any]                # Plan as dict
     plan_version: int
     plan_feedback: str                  # user feedback for replan
+    creative_concept: dict[str, Any]    # Director's chosen concept (hook_angle, visual_style, …)
+    t2v_prompts: dict[str, Any]         # shot_id -> {positive: str, negative: str} from PromptCompiler
 
     # ── Execution ─────────────────────────────────────────────────────────────
     scene_clips: list[dict]             # [{shot_id, clip_path, duration}]
