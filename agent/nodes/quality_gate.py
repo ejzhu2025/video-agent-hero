@@ -1,6 +1,7 @@
-"""quality_gate — check duration, resolution, content, captions, logo."""
+"""quality_gate — check duration, resolution, content, captions, logo, shot relevance."""
 from __future__ import annotations
 
+import base64
 import subprocess
 import json
 import os
@@ -12,6 +13,8 @@ from rich.console import Console
 console = Console()
 
 MAX_ATTEMPTS = 2
+# Relevance score threshold (0-10). Shots below this are flagged.
+RELEVANCE_THRESHOLD = 5
 
 
 def quality_gate(state: dict[str, Any]) -> dict[str, Any]:
@@ -101,6 +104,30 @@ def quality_gate(state: dict[str, Any]) -> dict[str, Any]:
             except Exception as exc:
                 issues.append(f"Logo file unreadable: {exc}")
 
+    # 7. Shot relevance — VLM checks each generated clip against its storyboard desc
+    scene_clips = state.get("scene_clips", [])
+    plan_storyboard = plan.get("storyboard", [])
+    relevance_results: list[dict] = []
+    low_relevance_shots: list[str] = []
+
+    if scene_clips and plan_storyboard and os.getenv("ANTHROPIC_API_KEY"):
+        relevance_results = _check_shot_relevance(scene_clips, plan_storyboard)
+        for r in relevance_results:
+            if r["score"] < RELEVANCE_THRESHOLD:
+                low_relevance_shots.append(r["shot_id"])
+                issues.append(
+                    f"Shot {r['shot_id']} low relevance score {r['score']}/10: {r['reason']}"
+                )
+        if relevance_results:
+            scores = [r["score"] for r in relevance_results]
+            avg = sum(scores) / len(scores)
+            console.print(
+                f"[cyan][QC][/cyan] Relevance: avg {avg:.1f}/10 "
+                f"| low: {low_relevance_shots or 'none'}"
+            )
+    else:
+        console.print("[dim][QC] Relevance check skipped (no clips/storyboard/API key)[/dim]")
+
     passed = len(issues) == 0 or (auto_fix_applied and attempt < MAX_ATTEMPTS)
 
     if issues:
@@ -114,6 +141,8 @@ def quality_gate(state: dict[str, Any]) -> dict[str, Any]:
         "issues": issues,
         "auto_fix_applied": auto_fix_applied,
         "attempt": attempt,
+        "relevance": relevance_results,
+        "low_relevance_shots": low_relevance_shots,
     }
 
     messages = state.get("messages", [])
@@ -155,6 +184,122 @@ def _probe_video(path: str) -> dict | None:
         }
     except Exception:
         return None
+
+
+def _extract_keyframe_b64(clip_path: str) -> str | None:
+    """Extract a single keyframe from a clip at 50% duration, return as base64 JPEG."""
+    try:
+        # Probe duration first
+        probe = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-print_format", "json",
+             "-show_format", clip_path],
+            capture_output=True, text=True, timeout=10,
+        )
+        fmt = json.loads(probe.stdout).get("format", {})
+        duration = float(fmt.get("duration", 1.0))
+        seek = max(0.1, duration * 0.5)
+
+        result = subprocess.run(
+            [
+                "ffmpeg", "-ss", str(seek), "-i", clip_path,
+                "-frames:v", "1",
+                "-vf", "scale=540:960",  # half-res thumbnail
+                "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1",
+            ],
+            capture_output=True, timeout=15,
+        )
+        if result.returncode != 0 or not result.stdout:
+            return None
+        return base64.standard_b64encode(result.stdout).decode("utf-8")
+    except Exception:
+        return None
+
+
+def _check_shot_relevance(
+    scene_clips: list[dict],
+    storyboard: list[dict],
+) -> list[dict]:
+    """Score each shot's generated clip against its storyboard desc using Claude Vision.
+
+    Returns list of {shot_id, score (0-10), reason, missing_elements}.
+    """
+    try:
+        import anthropic
+        client = anthropic.Anthropic()
+    except Exception as e:
+        console.print(f"[dim][QC] Relevance check skipped: {e}[/dim]")
+        return []
+
+    scenes_by_idx = {i: s for i, s in enumerate(storyboard)}
+    results: list[dict] = []
+
+    for i, clip_info in enumerate(scene_clips):
+        shot_id = clip_info.get("shot_id", f"S{i+1}")
+        clip_path = clip_info.get("clip_path", "")
+        scene = scenes_by_idx.get(i, {})
+        desc = scene.get("desc", "")
+
+        if not desc or not clip_path or not Path(clip_path).exists():
+            continue
+
+        img_b64 = _extract_keyframe_b64(clip_path)
+        if not img_b64:
+            console.print(f"[dim][QC] Skipping {shot_id} — keyframe extraction failed[/dim]")
+            continue
+
+        prompt = (
+            f"Storyboard description for this shot:\n\"{desc}\"\n\n"
+            "Look at the video frame above and score how well it matches the storyboard description.\n"
+            "Focus on: subject matter, environment/background, lighting, composition, colors.\n\n"
+            "Respond with ONLY a JSON object (no markdown):\n"
+            "{\n"
+            '  "score": <integer 0-10>,\n'
+            '  "reason": "<one sentence explaining the score>",\n'
+            '  "missing_elements": ["<element1>", "<element2>"]\n'
+            "}\n\n"
+            "Score guide: 0=completely wrong, 5=partially matches, 10=perfect match."
+        )
+
+        try:
+            response = client.messages.create(
+                model="claude-haiku-4-5-20251001",  # cheap + fast for VLM
+                max_tokens=256,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/jpeg",
+                                "data": img_b64,
+                            },
+                        },
+                        {"type": "text", "text": prompt},
+                    ],
+                }],
+            )
+            raw = response.content[0].text.strip()
+            # Strip markdown fences if present
+            raw = raw.strip("```json").strip("```").strip()
+            data = json.loads(raw)
+            score = int(data.get("score", 0))
+            reason = data.get("reason", "")
+            missing = data.get("missing_elements", [])
+            results.append({
+                "shot_id": shot_id,
+                "score": score,
+                "reason": reason,
+                "missing_elements": missing,
+            })
+            icon = "✅" if score >= RELEVANCE_THRESHOLD else "⚠️"
+            console.print(
+                f"  {icon} {shot_id} [{score}/10] {reason[:80]}"
+            )
+        except Exception as e:
+            console.print(f"[dim][QC] {shot_id} relevance check error: {e}[/dim]")
+
+    return results
 
 
 def _check_blank_frame(path: str) -> bool:

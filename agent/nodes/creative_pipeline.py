@@ -467,10 +467,38 @@ def run_critic(plan: dict[str, Any], llm_call: LLMCall) -> dict[str, Any]:
     # ── Pass A: generability check ────────────────────────────────────────────
     storyboard = plan.get("storyboard", [])
     shot_list = plan.get("shot_list", [])
+
+    # A1: VFX pattern violations
     violations: list[int] = []
     for i, scene in enumerate(storyboard):
         if _VFX_PATTERNS.search(scene.get("desc", "")):
             violations.append(i)
+
+    # A2: shot_type / desc mismatch — "product" (I2V) used for complex multi-object scenes
+    # I2V only animates the product image; it cannot render backgrounds, props, or environments.
+    # If a "product" shot's desc mentions surrounding objects or a specific background,
+    # auto-correct the type to "lifestyle" so T2V renders the full scene.
+    _COMPLEX_SCENE_PATTERNS = re.compile(
+        r"surround(?:ed|ing)|arranged\s+(?:symmetrically|around)|flat[\s-]lay"
+        r"|background\s+(?:of|with|shows?)|teal\s+surface|(?:coconut|watermelon|ingredient)"
+        r"\s+(?:wedge|slice|shell|piece)|overhead\s+(?:shot|crop|flat)"
+        r"|side[\s-]by[\s-]side|next\s+to\s+(?:it|the\s+cup|the\s+product)",
+        re.IGNORECASE,
+    )
+    type_fixes: list[int] = []
+    for i, (scene, shot) in enumerate(zip(storyboard, shot_list)):
+        if shot.get("type") == "product" and _COMPLEX_SCENE_PATTERNS.search(scene.get("desc", "")):
+            type_fixes.append(i)
+
+    if type_fixes:
+        console.print(
+            f"[yellow][critic][/yellow] {len(type_fixes)} shot_type mismatch(es) — "
+            "product→lifestyle (complex scene needs T2V)"
+        )
+        for i in type_fixes:
+            shot_list[i]["type"] = "lifestyle"
+            storyboard[i]["asset_hint"] = "lifestyle"
+            console.print(f"  [green]S{storyboard[i]['scene']}[/green] type: product → lifestyle")
 
     if violations:
         console.print(f"[yellow][critic][/yellow] {len(violations)} generability violation(s) detected — rewriting…")
