@@ -94,30 +94,9 @@ def executor_pipeline(state: dict[str, Any]) -> dict[str, Any]:
                                          width=1080, height=1920, ken_burns=False)
                         return {"shot_id": shot_id, "clip_path": clip_path, "duration": duration}
 
-                # ── Priority 2: Text-type shots (non-outro, or outro without product image) ──
-                if shot.get("type") == "text":
-                    from render.fal_t2i import generate_background, build_background_prompt
-                    bg_path = str(work_dir / f"{shot_id}_bg.png")
-                    try:
-                        bg_prompt = build_background_prompt(brand_kit, is_outro=is_outro)
-                        generate_background(bg_prompt, bg_path)
-                    except Exception as e:
-                        import sys
-                        print(f"[executor] FLUX bg failed: {e} — using PIL gradient", file=sys.stderr)
-                        bg_path = ""
-
-                    fg = FrameGenerator(brand_kit=brand_kit, work_dir=work_dir)
-                    frame_path = fg.generate_frame(
-                        shot_id=shot_id, shot_type="text",
-                        text_overlay=cta_text, scene_index=i,
-                        is_outro=is_outro,
-                        background_image_path=bg_path,
-                        logo_path=logo_path if is_outro else "",
-                    )
-                    fc.image_to_clip(str(frame_path), clip_path, duration=duration,
-                                     width=1080, height=1920, ken_burns=False)
-                    return {"shot_id": shot_id, "clip_path": clip_path, "duration": duration}
-
+                # ── Priority 2: All remaining shots → T2V (includes type="text") ──
+                # When no product image is available we skip static PIL cards entirely
+                # and let T2V render every shot from its storyboard description.
                 scene = storyboard[i] if i < len(storyboard) else {}
                 desc = scene.get("desc") or "cinematic product shot"
                 shot_type = shot.get("type", "wide")
@@ -211,7 +190,7 @@ def executor_pipeline(state: dict[str, Any]) -> dict[str, Any]:
                     duration=duration,
                     width=1080,
                     height=1920,
-                    ken_burns=(shot_type not in ("text", "transition")),
+                    ken_burns=(shot_type not in ("transition",) and not is_outro),
                 )
 
                 scene_clips.append(
