@@ -30,9 +30,13 @@ from pydantic import BaseModel
 
 import agent.deps as deps
 from web.brand_kit_api import router as brand_kit_router
+from web.auth.router import router as auth_router
+from web.billing.router import router as billing_router
 
 app = FastAPI(title="Video Agent Hero")
 app.include_router(brand_kit_router)
+app.include_router(auth_router)
+app.include_router(billing_router)
 
 # ── In-memory SSE state ───────────────────────────────────────────────────────
 
@@ -825,10 +829,46 @@ _HTML = r"""<!DOCTYPE html>
     <button onclick="newVideo()" class="btn-secondary text-xs px-3 py-1.5 rounded-md flex items-center gap-1">
       <span>+</span> New
     </button>
+    <!-- Auth / Credits -->
+    <div id="auth-guest" class="hidden">
+      <a href="/auth/login" class="btn-primary text-xs px-3 py-1.5 rounded-md flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Sign in
+      </a>
+    </div>
+    <div id="auth-user" class="hidden flex items-center gap-2">
+      <button onclick="openTopup()" class="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md bg-gray-800 hover:bg-gray-700 text-yellow-400 font-medium">
+        <span>⚡</span><span id="credit-balance">0</span> credits
+      </button>
+      <div class="relative group">
+        <img id="user-avatar" src="" class="w-7 h-7 rounded-full cursor-pointer border border-gray-700" title=""/>
+        <div class="absolute right-0 top-9 hidden group-hover:block bg-gray-900 border border-gray-700 rounded-lg shadow-xl py-1 min-w-32 z-50">
+          <div id="user-email" class="px-3 py-1.5 text-xs text-gray-400 border-b border-gray-800"></div>
+          <a href="/auth/logout" class="block px-3 py-1.5 text-xs text-gray-300 hover:text-white hover:bg-gray-800">Sign out</a>
+        </div>
+      </div>
+    </div>
   </div>
 </header>
 
 <!-- Settings modal -->
+<!-- ── Top-up / Credits Modal ─────────────────────────────────────────── -->
+<div id="topup-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+  <div class="card w-full max-w-lg p-6 mx-4">
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h2 class="text-base font-semibold text-white">Buy Credits</h2>
+        <p class="text-xs text-gray-400 mt-0.5">1 credit ≈ 1 AI video shot &nbsp;·&nbsp; Balance: <span id="topup-balance" class="text-yellow-400 font-medium">0</span> credits</p>
+      </div>
+      <button onclick="closeTopup()" class="text-gray-500 hover:text-white text-xl leading-none">✕</button>
+    </div>
+    <div id="topup-plans" class="grid grid-cols-3 gap-3 mb-5">
+      <!-- filled by JS -->
+    </div>
+    <p class="text-xs text-gray-600 text-center">Payments processed securely by Stripe. No subscription.</p>
+  </div>
+</div>
+
 <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60">
   <div class="card w-full max-w-md p-6 mx-4">
     <div class="flex items-center justify-between mb-4">
@@ -2482,6 +2522,83 @@ updateApiStatus();
 document.getElementById('chat-input').focus();
 // Refresh project list every 10s
 setInterval(loadProjects, 10000);
+
+// ── Auth & Credits ────────────────────────────────────────────────────────
+
+async function loadAuthState() {
+  try {
+    const res = await fetch('/auth/me');
+    if (res.ok) {
+      const user = await res.json();
+      document.getElementById('auth-guest').classList.add('hidden');
+      const authUser = document.getElementById('auth-user');
+      authUser.classList.remove('hidden');
+      authUser.classList.add('flex');
+      const avatar = document.getElementById('user-avatar');
+      if (user.picture) { avatar.src = user.picture; avatar.title = user.name; }
+      document.getElementById('user-email').textContent = user.email;
+      document.getElementById('credit-balance').textContent = user.credits ?? 0;
+      document.getElementById('topup-balance').textContent = user.credits ?? 0;
+    } else {
+      document.getElementById('auth-guest').classList.remove('hidden');
+      document.getElementById('auth-user').classList.add('hidden');
+    }
+  } catch(e) {
+    document.getElementById('auth-guest').classList.remove('hidden');
+  }
+}
+
+async function openTopup() {
+  // Load plans on first open
+  const container = document.getElementById('topup-plans');
+  if (!container.hasChildNodes()) {
+    const res = await fetch('/api/billing/plans');
+    const plans = await res.json();
+    container.innerHTML = plans.map(p => `
+      <div class="rounded-xl border ${p.popular ? 'border-indigo-500 bg-indigo-950/40' : 'border-gray-700 bg-gray-900'} p-4 flex flex-col gap-2 cursor-pointer hover:border-indigo-400 transition-colors" onclick="startCheckout('${p.id}')">
+        ${p.popular ? '<span class="text-[10px] text-indigo-400 font-semibold uppercase tracking-wide">Most popular</span>' : ''}
+        <div class="text-sm font-semibold text-white">${p.name}</div>
+        <div class="text-2xl font-bold text-white">$${(p.price_usd/100).toFixed(0)}</div>
+        <div class="text-xs text-yellow-400 font-medium">${p.credits} credits</div>
+        <div class="text-xs text-gray-500">${p.description}</div>
+      </div>
+    `).join('');
+  }
+  document.getElementById('topup-modal').classList.remove('hidden');
+}
+
+function closeTopup() {
+  document.getElementById('topup-modal').classList.add('hidden');
+}
+
+async function startCheckout(planId) {
+  try {
+    const res = await fetch('/api/billing/checkout', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({plan_id: planId}),
+    });
+    if (res.status === 401) { window.location.href = '/auth/login'; return; }
+    if (!res.ok) { toast('Payment service unavailable', 'error'); return; }
+    const { url } = await res.json();
+    window.location.href = url;
+  } catch(e) {
+    toast('Failed to start checkout', 'error');
+  }
+}
+
+// Show success/cancel toast if returning from Stripe
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('payment') === 'success') {
+  toast('Payment successful! Credits added to your account.', 'success');
+  history.replaceState({}, '', '/');
+  setTimeout(loadAuthState, 1500); // re-fetch updated balance
+} else if (urlParams.get('payment') === 'cancel') {
+  toast('Payment cancelled.', 'error');
+  history.replaceState({}, '', '/');
+}
+
+loadAuthState();
 </script>
 </body>
 </html>

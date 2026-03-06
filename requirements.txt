@@ -32,3 +32,7 @@ httpx>=0.27.0
 fastapi>=0.111.0
 uvicorn>=0.30.0
 python-multipart>=0.0.9
+
+# Auth & Billing
+python-jose[cryptography]>=3.3.0
+stripe>=7.0.0
