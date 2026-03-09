@@ -20,6 +20,20 @@ import agent.deps as deps
 from web.auth.deps import optional_user
 from web.app_state import _run_events, _run_queues
 
+# When VAH_GUEST_FREE=1 (default), unauthenticated users skip all credit checks.
+# Set VAH_GUEST_FREE=0 in .env to require credits for guests too.
+_GUEST_FREE = os.environ.get("VAH_GUEST_FREE", "1") != "0"
+
+
+def _billing_user_id(auth_user, fallback_user_id: str) -> str | None:
+    """Return the user_id to use for billing.
+    Returns None when the user is a guest and VAH_GUEST_FREE is enabled (skip all checks)."""
+    if auth_user:
+        return auth_user.id
+    if _GUEST_FREE:
+        return None  # guest → unlimited
+    return fallback_user_id or None
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -431,7 +445,7 @@ async def execute_project(
 
     deps.db().update_project_plan(project_id, {**plan, "_quality": quality})
 
-    user_id = (auth_user.id if auth_user else None) or proj.get("user_id", "")
+    user_id = _billing_user_id(auth_user, proj.get("user_id", ""))
     shot_count = len(plan.get("shot_list") or []) or 7
     from web.billing.credits import COSTS, get_credits
     cost_per_shot = COSTS["shot_hd"] if quality == "hd" else COSTS["shot_turbo"]
@@ -513,7 +527,7 @@ async def rerender_shot(
     brand_kit_obj = deps.db().get_brand_kit(proj["brand_id"])
     from web.billing.credits import COSTS, get_credits
     cost_per_shot = COSTS["shot_hd"] if quality == "hd" else COSTS["shot_turbo"]
-    user_id = (auth_user.id if auth_user else None) or proj.get("user_id", "")
+    user_id = _billing_user_id(auth_user, proj.get("user_id", ""))
     if user_id:
         balance = get_credits(user_id)
         if balance < cost_per_shot:
@@ -622,7 +636,7 @@ async def modify_project(
         "quality": quality,
     }
 
-    modify_user_id = (auth_user.id if auth_user else None) or proj.get("user_id", "")
+    modify_user_id = _billing_user_id(auth_user, proj.get("user_id", ""))
     from web.billing.credits import COSTS as _COSTS
     _cost_per_shot = _COSTS["shot_hd"] if quality == "hd" else _COSTS["shot_turbo"]
 
