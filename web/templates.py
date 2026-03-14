@@ -126,9 +126,7 @@ _HTML = r"""<!DOCTYPE html>
       <span>Current balance: <span id="topup-balance" class="text-yellow-400 font-medium">0</span> credits</span>
       <span class="text-gray-600">1 credit = 1 turbo shot &nbsp;·&nbsp; 3 credits = 1 HD shot</span>
     </div>
-    <div id="topup-plans" class="grid grid-cols-3 gap-3 mb-5">
-      <!-- filled by JS -->
-    </div>
+    <div id="topup-plans" class="grid grid-cols-3 gap-3 mb-5"></div>
     <p class="text-xs text-gray-600 text-center">Payments processed securely by Stripe. No subscription.</p>
   </div>
 </div>
