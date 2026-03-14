@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from pathlib import Path
 
 import httpx
 import replicate
+from replicate.exceptions import ReplicateError
 
 REPLICATE_CALL_TIMEOUT = 300  # 5 minutes
 
@@ -67,17 +69,26 @@ def generate_clip(
     neg = negative_prompt or _DEFAULT_NEGATIVE
     clean_prompt = _sanitize(prompt)
 
-    output = replicate.run(
-        model,
-        input={
-            "prompt": clean_prompt,
-            "negative_prompt": neg,
-            "num_frames": preset["num_frames"],
-            "fps": 16,
-            "resolution": preset["resolution"],
-            "aspect_ratio": "9:16",
-        },
-    )
+    _input = {
+        "prompt": clean_prompt,
+        "negative_prompt": neg,
+        "num_frames": preset["num_frames"],
+        "fps": 16,
+        "resolution": preset["resolution"],
+        "aspect_ratio": "9:16",
+    }
+
+    max_retries = 4
+    for attempt in range(max_retries):
+        try:
+            output = replicate.run(model, input=_input)
+            break
+        except ReplicateError as exc:
+            if exc.status == 429 and attempt < max_retries - 1:
+                wait = 15 * (attempt + 1)   # 15s → 30s → 45s
+                time.sleep(wait)
+                continue
+            raise
 
     url = _extract_url(output)
     with httpx.Client(timeout=180, follow_redirects=True) as client:

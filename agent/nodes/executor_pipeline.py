@@ -167,7 +167,9 @@ def executor_pipeline(state: dict[str, Any]) -> dict[str, Any]:
                 return {"shot_id": shot_id, "clip_path": clip_path, "duration": duration}
 
             results: dict[int, dict] = {}
-            with ThreadPoolExecutor(max_workers=min(6, len(shot_list))) as pool:
+            # Replicate free-tier burst limit is 1 req/s — cap concurrency to avoid 429s
+            _max_w = 2 if _using_replicate else min(6, len(shot_list))
+            with ThreadPoolExecutor(max_workers=_max_w) as pool:
                 futures = {pool.submit(_process_shot, (i, s)): i for i, s in enumerate(shot_list)}
                 for fut in as_completed(futures):
                     idx = futures[fut]
