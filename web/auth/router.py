@@ -1,27 +1,52 @@
 """auth/router.py — /auth/* endpoints: login, callback, logout, me."""
 from __future__ import annotations
 
+import hashlib
+import hmac
 import secrets
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 
-from web.auth.deps import COOKIE_NAME, JWT_EXPIRE_DAYS, create_token, current_user
+from web.auth.deps import COOKIE_NAME, JWT_EXPIRE_DAYS, JWT_SECRET, create_token, current_user
 from web.auth.google import exchange_code, get_authorization_url, get_userinfo
 from web.auth.models import upsert_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-# Simple in-process state nonce store (sufficient for single-instance deployment)
-_pending_states: set[str] = set()
+# ── Stateless HMAC-signed OAuth state (survives server restarts) ───────────────
+
+def _make_state() -> str:
+    """Create a signed state token: '{ts}:{nonce}:{sig}'."""
+    ts    = str(int(time.time()))
+    nonce = secrets.token_urlsafe(8)
+    payload = f"{ts}:{nonce}"
+    sig = hmac.new(JWT_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()[:16]
+    return f"{payload}:{sig}"
+
+
+def _verify_state(state: str, max_age: int = 600) -> bool:
+    """Return True if state is a valid, unexpired HMAC token."""
+    try:
+        parts = state.rsplit(":", 1)
+        if len(parts) != 2:
+            return False
+        payload, sig = parts
+        expected = hmac.new(JWT_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()[:16]
+        if not hmac.compare_digest(sig, expected):
+            return False
+        ts = int(payload.split(":")[0])
+        return time.time() - ts < max_age
+    except Exception:
+        return False
 
 
 @router.get("/login")
 def login():
     """Redirect browser to Google consent screen."""
-    state = secrets.token_urlsafe(16)
-    _pending_states.add(state)
+    state = _make_state()
     return RedirectResponse(get_authorization_url(state))
 
 
@@ -30,9 +55,8 @@ def callback(code: str = "", state: str = "", error: str = ""):
     """Google posts back here after user grants/denies consent."""
     if error:
         raise HTTPException(400, f"Google OAuth error: {error}")
-    if state not in _pending_states:
+    if not _verify_state(state):
         raise HTTPException(400, "Invalid or expired OAuth state")
-    _pending_states.discard(state)
 
     try:
         tokens = exchange_code(code)
