@@ -8,7 +8,7 @@ import json
 import logging
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -216,7 +216,7 @@ async def _run_agent_with_state(
                     if mode == "tasks":
                         if "triggers" in chunk:
                             node_name = chunk.get("name", "")
-                            ts = datetime.now().isoformat()
+                            ts = datetime.now(timezone.utc).isoformat()
                             node_started_at[node_name] = ts
                             _emit({
                                 "type": "node_start",
@@ -225,7 +225,7 @@ async def _run_agent_with_state(
                             })
                     elif mode == "updates":
                         for node_name, node_output in chunk.items():
-                            ts = datetime.now().isoformat()
+                            ts = datetime.now(timezone.utc).isoformat()
                             started = node_started_at.get(node_name, ts)
                             _emit({
                                 "type": "node_done",
@@ -238,7 +238,7 @@ async def _run_agent_with_state(
                             if on_node:
                                 on_node(node_name, node_output)
 
-            _emit({"type": "done", "timestamp": datetime.now().isoformat()})
+            _emit({"type": "done", "timestamp": datetime.now(timezone.utc).isoformat()})
             deps.db().update_project_status(project_id, "done")
 
         except Exception as exc:
@@ -247,7 +247,7 @@ async def _run_agent_with_state(
                 "type": "error",
                 "message": str(exc),
                 "traceback": traceback.format_exc(),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             })
             deps.db().update_project_status(project_id, "failed")
 

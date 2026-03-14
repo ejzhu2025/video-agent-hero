@@ -1,0 +1,9 @@
+[
+  {"date": "2026-03-14", "text": "Turso cloud SQLite — credits now persist across server restarts"},
+  {"date": "2026-03-14", "text": "Google OAuth — stateless HMAC state token, survives restarts"},
+  {"date": "2026-03-14", "text": "Replicate 429 auto-retry with backoff"},
+  {"date": "2026-03-06", "text": "Outro product display fix — uploaded photo now always shown in last frame"},
+  {"date": "2026-03-06", "text": "Relevance re-render loop — low-score shots auto-retry with enhanced prompt"},
+  {"date": "2026-03-06", "text": "fal.ai 5-min timeout guard — no more infinite hangs"},
+  {"date": "2026-03-06", "text": "VLM quality gate — each shot scored against storyboard description"}
+]

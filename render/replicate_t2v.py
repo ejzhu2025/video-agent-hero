@@ -19,8 +19,8 @@ _MODELS = {
 }
 
 _QUALITY_PRESETS = {
-    "turbo": {"num_frames": 33, "resolution": "480p"},
-    "hd":    {"num_frames": 81, "resolution": "720p"},
+    "turbo": {"num_frames": 81, "resolution": "480p"},
+    "hd":    {"num_frames": 121, "resolution": "720p"},
 }
 
 _DEFAULT_NEGATIVE = (

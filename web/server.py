@@ -154,6 +154,16 @@ def _upsert_env_file(env_path: Path, updates: dict[str, str]) -> None:
     env_path.write_text("\n".join(lines) + "\n")
 
 
+@app.get("/api/changelog")
+async def get_changelog():
+    """Return changelog entries from web/changelog.json."""
+    import json as _json
+    p = Path(__file__).parent / "changelog.json"
+    if p.exists():
+        return _json.loads(p.read_text())
+    return []
+
+
 @app.get("/api/settings")
 async def get_settings():
     """Return current settings (keys masked)."""

@@ -53,14 +53,7 @@ _HTML = r"""<!DOCTYPE html>
   <div class="flex items-center gap-3 overflow-hidden">
     <span class="shrink-0 font-semibold text-indigo-400">What's new</span>
     <div id="update-entries" class="flex items-center gap-4 overflow-x-auto whitespace-nowrap" style="scrollbar-width:none;-ms-overflow-style:none;">
-      <span class="text-indigo-500">2026-03-06</span><span>Outro product display fix — uploaded photo now always shown in last frame</span>
-      <span class="mx-1 text-indigo-700">·</span>
-      <span class="text-indigo-500">2026-03-06</span><span>Relevance re-render loop — low-score shots auto-retry with enhanced prompt</span>
-      <span class="mx-1 text-indigo-700">·</span>
-      <span class="text-indigo-500">2026-03-06</span><span>fal.ai 5-min timeout guard — no more infinite hangs</span>
-      <span class="mx-1 text-indigo-700">·</span>
-      <span class="text-indigo-500">2026-03-06</span><span>VLM quality gate — each shot scored against storyboard description</span>
-      <span id="changelog-entries"></span>
+      <span id="changelog-entries" class="flex items-center gap-4"></span>
     </div>
   </div>
   <button onclick="document.getElementById('update-banner').remove()" class="ml-3 shrink-0 text-indigo-600 hover:text-indigo-300">✕</button>
@@ -2205,15 +2198,13 @@ function closeTrackerModal() {
 
 async function loadChangelog() {
   try {
-    const entries = await fetch('/api/feedback/changelog').then(r => r.json());
+    const entries = await fetch('/api/changelog').then(r => r.json());
     if (!entries.length) return;
     const container = document.getElementById('changelog-entries');
     if (!container) return;
-    const html = entries.map(e => {
-      const names = e.contributors && e.contributors.length
-        ? ` · <span class="text-indigo-400">thanks ${e.contributors.map(n => '@'+n).join(', ')}</span>` : '';
-      return `<span class="mx-1 text-indigo-700">·</span><span class="text-indigo-500">${e.date}</span><span>${escHtml(e.description)}${names}</span>`;
-    }).join('');
+    const html = entries.map(e =>
+      `<span class="mx-1 text-indigo-700">·</span><span class="text-indigo-500">${escHtml(e.date)}</span><span>${escHtml(e.text)}</span>`
+    ).join('');
     container.innerHTML = html;
   } catch(e) {}
 }
