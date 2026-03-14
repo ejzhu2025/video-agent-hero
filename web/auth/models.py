@@ -17,7 +17,7 @@ def _now() -> str:
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
-    id         TEXT PRIMARY KEY,          -- Google sub (stable user ID)
+    id         TEXT PRIMARY KEY,
     email      TEXT UNIQUE NOT NULL,
     name       TEXT NOT NULL DEFAULT '',
     picture    TEXT NOT NULL DEFAULT '',
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS fulfilled_sessions (
-    session_id TEXT PRIMARY KEY,          -- Stripe checkout session ID
+    session_id TEXT PRIMARY KEY,
     user_id    TEXT NOT NULL,
     credits    INTEGER NOT NULL,
     fulfilled_at TEXT NOT NULL
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS fulfilled_sessions (
 
 def ensure_schema() -> None:
     db = deps.db()
-    with sqlite3.connect(str(db.db_path)) as conn:
+    with db._conn() as conn:
         conn.executescript(_SCHEMA)
 
 
@@ -64,18 +64,11 @@ class User:
 
 # ── CRUD ──────────────────────────────────────────────────────────────────────
 
-def _conn() -> sqlite3.Connection:
-    db = deps.db()
-    conn = sqlite3.connect(str(db.db_path))
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
 def upsert_user(google_id: str, email: str, name: str, picture: str) -> User:
     """Insert new user or update name/picture if already exists. Returns User."""
     ensure_schema()
     now = _now()
-    with _conn() as conn:
+    with deps.db()._conn() as conn:
         conn.execute(
             """INSERT INTO users (id, email, name, picture, credits, created_at, updated_at)
                VALUES (?, ?, ?, ?, 10, ?, ?)
@@ -90,7 +83,7 @@ def upsert_user(google_id: str, email: str, name: str, picture: str) -> User:
 
 def get_user(user_id: str) -> Optional[User]:
     ensure_schema()
-    with _conn() as conn:
+    with deps.db()._conn() as conn:
         row = conn.execute(
             "SELECT * FROM users WHERE id=?", (user_id,)
         ).fetchone()
@@ -101,7 +94,7 @@ def get_user(user_id: str) -> Optional[User]:
 
 def get_user_by_email(email: str) -> Optional[User]:
     ensure_schema()
-    with _conn() as conn:
+    with deps.db()._conn() as conn:
         row = conn.execute(
             "SELECT * FROM users WHERE email=?", (email,)
         ).fetchone()

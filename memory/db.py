@@ -1,7 +1,8 @@
-"""SQLite long-term memory store."""
+"""SQLite long-term memory store — with optional Turso cloud sync."""
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -15,13 +16,79 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+_TURSO_URL   = os.getenv("TURSO_DATABASE_URL", "")
+_TURSO_TOKEN = os.getenv("TURSO_AUTH_TOKEN", "")
+_USE_TURSO   = bool(_TURSO_URL and _TURSO_TOKEN)
+
+
+class _SyncConn:
+    """Wraps a libsql connection with sqlite3-compatible context manager.
+    Calls conn.sync() on open (pull) and after commit (push)."""
+
+    def __init__(self, raw):
+        self._c = raw
+        self._c.sync()           # pull latest from Turso
+
+    # ── context manager ───────────────────────────────────────────────────────
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, *_):
+        if exc_type is None:
+            self._c.commit()
+            self._c.sync()       # push writes to Turso
+        else:
+            try:
+                self._c.rollback()
+            except Exception:
+                pass
+        return False
+
+    # ── proxy the methods used by Database ───────────────────────────────────
+    def execute(self, sql, params=()):
+        return self._c.execute(sql, params)
+
+    def executescript(self, sql: str):
+        """libsql lacks executescript — split on ';' and execute each statement."""
+        for stmt in sql.split(";"):
+            stmt = stmt.strip()
+            if stmt and not stmt.startswith("--"):
+                try:
+                    self._c.execute(stmt)
+                except Exception:
+                    pass
+        self._c.commit()
+        self._c.sync()
+
+    @property
+    def row_factory(self):
+        return self._c.row_factory
+
+    @row_factory.setter
+    def row_factory(self, value):
+        self._c.row_factory = value
+
+
 class Database:
     def __init__(self, db_path: str | Path = "./data/vah.db"):
         self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        if _USE_TURSO:
+            # Use /tmp as local replica cache (ephemeral OK — remote is source of truth)
+            self.db_path = Path("/tmp/vah_replica.db")
+        else:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_schema()
 
-    def _conn(self) -> sqlite3.Connection:
+    def _conn(self):
+        if _USE_TURSO:
+            import libsql_experimental as libsql  # pip: libsql-experimental
+            raw = libsql.connect(
+                str(self.db_path),
+                sync_url=_TURSO_URL,
+                auth_token=_TURSO_TOKEN,
+            )
+            raw.row_factory = sqlite3.Row
+            return _SyncConn(raw)
         conn = sqlite3.connect(str(self.db_path))
         conn.row_factory = sqlite3.Row
         return conn

@@ -1,16 +1,13 @@
 """billing/credits.py — Credit balance operations on the users table."""
 from __future__ import annotations
 
-import sqlite3
-
 import agent.deps as deps
 from web.auth.models import ensure_schema
 
 
 def get_credits(user_id: str) -> int:
     ensure_schema()
-    db = deps.db()
-    with sqlite3.connect(str(db.db_path)) as conn:
+    with deps.db()._conn() as conn:
         row = conn.execute(
             "SELECT credits FROM users WHERE id=?", (user_id,)
         ).fetchone()
@@ -20,8 +17,7 @@ def get_credits(user_id: str) -> int:
 def add_credits(user_id: str, amount: int) -> int:
     """Add credits to user (e.g. after successful payment). Returns new balance."""
     ensure_schema()
-    db = deps.db()
-    with sqlite3.connect(str(db.db_path)) as conn:
+    with deps.db()._conn() as conn:
         conn.execute(
             "UPDATE users SET credits = credits + ? WHERE id=?",
             (amount, user_id),
@@ -38,22 +34,18 @@ def fulfill_session(session_id: str, user_id: str, credits: int) -> tuple[bool, 
     Returns (was_new, new_balance). If session already fulfilled, returns (False, current_balance).
     """
     ensure_schema()
-    db = deps.db()
     now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
-    with sqlite3.connect(str(db.db_path)) as conn:
-        # Check if already fulfilled (idempotency)
+    with deps.db()._conn() as conn:
         existing = conn.execute(
             "SELECT credits FROM fulfilled_sessions WHERE session_id=?", (session_id,)
         ).fetchone()
         if existing:
             row = conn.execute("SELECT credits FROM users WHERE id=?", (user_id,)).fetchone()
             return False, (row[0] if row else 0)
-        # Mark as fulfilled FIRST (prevents race condition)
         conn.execute(
             "INSERT INTO fulfilled_sessions (session_id, user_id, credits, fulfilled_at) VALUES (?,?,?,?)",
             (session_id, user_id, credits, now),
         )
-        # Add credits
         conn.execute(
             "UPDATE users SET credits = credits + ? WHERE id=?", (credits, user_id)
         )
@@ -64,8 +56,7 @@ def fulfill_session(session_id: str, user_id: str, credits: int) -> tuple[bool, 
 def deduct_credits(user_id: str, amount: int) -> int:
     """Deduct credits. Raises ValueError if balance insufficient. Returns new balance."""
     ensure_schema()
-    db = deps.db()
-    with sqlite3.connect(str(db.db_path)) as conn:
+    with deps.db()._conn() as conn:
         row = conn.execute(
             "SELECT credits FROM users WHERE id=?", (user_id,)
         ).fetchone()
@@ -80,12 +71,11 @@ def deduct_credits(user_id: str, amount: int) -> int:
 
 
 # ── Cost table ────────────────────────────────────────────────────────────────
-# 1 credit ≈ $0.10.  A 5-shot turbo video ≈ 5 credits.
 
 COSTS = {
-    "shot_turbo": 1,   # 1 credit per T2V/I2V shot (turbo)
-    "shot_hd":    3,   # 3 credits per T2V/I2V shot (hd)
-    "flux_kontext": 1, # 1 credit for FLUX Kontext outro frame
+    "shot_turbo": 1,
+    "shot_hd":    3,
+    "flux_kontext": 1,
 }
 
 
