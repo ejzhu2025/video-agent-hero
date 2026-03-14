@@ -5,6 +5,7 @@ import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
+from pydantic import BaseModel
 
 from web.auth.deps import COOKIE_NAME, JWT_EXPIRE_DAYS, create_token, current_user
 from web.auth.google import exchange_code, get_authorization_url, get_userinfo
@@ -86,8 +87,6 @@ def guest_access_status(request: Request):
 
 class GuestAccessRequest(BaseModel):
     code: str
-
-from pydantic import BaseModel  # noqa: E402
 
 
 @router.post("/guest-access")
