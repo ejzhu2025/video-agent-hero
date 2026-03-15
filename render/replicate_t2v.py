@@ -78,14 +78,20 @@ def generate_clip(
         "aspect_ratio": "9:16",
     }
 
-    max_retries = 4
+    max_retries = 5
     for attempt in range(max_retries):
         try:
             output = replicate.run(model, input=_input)
             break
-        except ReplicateError as exc:
-            if exc.status == 429 and attempt < max_retries - 1:
-                wait = 15 * (attempt + 1)   # 15s → 30s → 45s
+        except Exception as exc:
+            exc_str = str(exc)
+            is_429 = (
+                getattr(exc, "status", None) == 429
+                or "429" in exc_str
+                or "throttled" in exc_str.lower()
+            )
+            if is_429 and attempt < max_retries - 1:
+                wait = 15 * (attempt + 1)   # 15s → 30s → 45s → 60s → 75s
                 time.sleep(wait)
                 continue
             raise
