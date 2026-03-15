@@ -34,6 +34,26 @@ def _guest_code_valid(request: Request) -> bool:
     return bool(_GUEST_CODES) and code in _GUEST_CODES
 
 
+# user_ids that existed before auth was added — treated as legacy (not shown to anyone)
+_LEGACY_USER_IDS: frozenset[str] = frozenset({"ej", "default", ""})
+
+
+def _resolve_user_id(auth_user, request: Request) -> str:
+    """Return a stable string user_id for the current requester, or raise 401."""
+    if auth_user:
+        return auth_user.id
+    if _guest_code_valid(request):
+        return "guest"
+    raise HTTPException(status_code=401, detail="Login required or enter an access code")
+
+
+def _check_project_ownership(proj: dict, user_id: str) -> None:
+    """Raise 403 if the requester doesn't own this project."""
+    if proj.get("user_id") == user_id:
+        return
+    raise HTTPException(status_code=403, detail="Access denied")
+
+
 def _billing_user_id(auth_user, request: Request) -> str | None:
     """Return the user_id to use for billing, or raise 401 if access is denied.
     - Logged-in user  → their user_id (credits deducted normally)
@@ -56,7 +76,6 @@ router = APIRouter()
 class CreateProjectRequest(BaseModel):
     brief: str
     brand_id: str = "tong_sui"
-    user_id: str = "ej"
 
 
 class RunRequest(BaseModel):
@@ -72,7 +91,6 @@ class FeedbackRequest(BaseModel):
 class PlanRequest(BaseModel):
     brief: str = ""
     brand_id: str = "tong_sui"
-    user_id: str = "ej"
     clarification_answers: dict = {}
     plan_feedback: str = ""  # non-empty → replan from existing plan
 
@@ -258,23 +276,27 @@ async def _run_agent_with_state(
 
 
 @router.get("/api/projects")
-async def list_projects():
-    return deps.db().list_projects(limit=30)
+async def list_projects(request: Request, auth_user=Depends(optional_user)):
+    user_id = _resolve_user_id(auth_user, request)
+    return deps.db().list_projects(user_id=user_id, limit=30)
 
 
 @router.post("/api/projects")
-async def create_project(req: CreateProjectRequest):
+async def create_project(req: CreateProjectRequest, request: Request, auth_user=Depends(optional_user)):
+    user_id = _resolve_user_id(auth_user, request)
     pid = deps.db().create_project(
-        brief=req.brief, brand_id=req.brand_id, user_id=req.user_id,
+        brief=req.brief, brand_id=req.brand_id, user_id=user_id,
     )
     return {"project_id": pid}
 
 
 @router.get("/api/projects/{project_id}")
-async def get_project(project_id: str):
+async def get_project(project_id: str, request: Request, auth_user=Depends(optional_user)):
+    user_id = _resolve_user_id(auth_user, request)
     proj = deps.db().get_project(project_id)
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
+    _check_project_ownership(proj, user_id)
     data_dir = Path(os.environ.get("VAH_DATA_DIR", "./data"))
     product_path = data_dir / "projects" / project_id / "product.png"
     proj["has_product_image"] = product_path.exists()
@@ -282,10 +304,12 @@ async def get_project(project_id: str):
 
 
 @router.delete("/api/projects/{project_id}")
-async def delete_project(project_id: str):
+async def delete_project(project_id: str, request: Request, auth_user=Depends(optional_user)):
+    user_id = _resolve_user_id(auth_user, request)
     proj = deps.db().get_project(project_id)
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
+    _check_project_ownership(proj, user_id)
     deps.db().delete_project(project_id)
     return {"status": "deleted"}
 
@@ -294,10 +318,15 @@ async def delete_project(project_id: str):
 
 
 @router.post("/api/projects/{project_id}/product-image")
-async def upload_project_product_image(project_id: str, file: UploadFile = File(...)):
+async def upload_project_product_image(
+    project_id: str, file: UploadFile = File(...),
+    request: Request = None, auth_user=Depends(optional_user),
+):
+    user_id = _resolve_user_id(auth_user, request)
     proj = deps.db().get_project(project_id)
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
+    _check_project_ownership(proj, user_id)
     content = await file.read()
     if len(content) < 10:
         raise HTTPException(status_code=400, detail="File too small")
@@ -348,12 +377,15 @@ async def run_project(
 
 @router.post("/api/projects/{project_id}/plan")
 async def plan_project(
-    project_id: str, req: PlanRequest, background_tasks: BackgroundTasks
+    project_id: str, req: PlanRequest, background_tasks: BackgroundTasks,
+    request: Request, auth_user=Depends(optional_user),
 ):
     """Run planning-only phase; stores plan in DB and sets status='planned'."""
+    user_id = _resolve_user_id(auth_user, request)
     proj = deps.db().get_project(project_id)
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
+    _check_project_ownership(proj, user_id)
 
     from agent.graph import build_plan_only_graph
 
@@ -422,6 +454,7 @@ async def execute_project(
     proj = deps.db().get_project(project_id)
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
+    _check_project_ownership(proj, _resolve_user_id(auth_user, request))
 
     from agent.graph import build_execute_only_graph
 
@@ -517,6 +550,7 @@ async def rerender_shot(
     proj = deps.db().get_project(project_id)
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
+    _check_project_ownership(proj, _resolve_user_id(auth_user, request))
 
     plan = proj.get("latest_plan_json") or {}
     if not plan:
@@ -614,6 +648,7 @@ async def modify_project(
     proj = deps.db().get_project(project_id)
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
+    _check_project_ownership(proj, _resolve_user_id(auth_user, request))
 
     plan = proj.get("latest_plan_json") or {}
     if not plan:

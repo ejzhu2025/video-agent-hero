@@ -341,11 +341,17 @@ class Database:
         d["latest_plan_json"] = json.loads(d["latest_plan_json"]) if d["latest_plan_json"] else None
         return d
 
-    def list_projects(self, limit: int = 20) -> list[dict[str, Any]]:
+    def list_projects(self, user_id: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
         with self._conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM projects ORDER BY created_at DESC LIMIT ?", (limit,)
-            ).fetchall()
+            if user_id is not None:
+                rows = conn.execute(
+                    "SELECT * FROM projects WHERE user_id=? ORDER BY created_at DESC LIMIT ?",
+                    (user_id, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM projects ORDER BY created_at DESC LIMIT ?", (limit,)
+                ).fetchall()
         result = []
         for row in rows:
             d = dict(row)
