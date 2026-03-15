@@ -17,7 +17,7 @@ from web.billing.credits import COSTS, add_credits
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 
-DAILY_CREDIT_CAP = 500
+DAILY_CREDIT_CAP = 20
 MAX_SINGLE_AWARD_RATIO = 0.80
 
 
@@ -276,7 +276,7 @@ Return ONLY valid JSON, no markdown:
             pct = 0.0
 
         raw_award = int(credits_spent * pct)
-        max_single = min(int(credits_spent * MAX_SINGLE_AWARD_RATIO), 200)
+        max_single = min(int(credits_spent * MAX_SINGLE_AWARD_RATIO), 10)
         credits = min(raw_award, max_single)
 
         # Respect daily cap

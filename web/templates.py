@@ -161,7 +161,7 @@ _HTML = r"""<!DOCTYPE html>
     <div class="flex items-center justify-between mb-4">
       <div>
         <h2 class="text-base font-semibold text-white">Rate this video</h2>
-        <p class="text-xs text-gray-400 mt-0.5">Your feedback shapes the next release · Earn up to 200 credits</p>
+        <p class="text-xs text-gray-400 mt-0.5">Your feedback shapes the next release · Earn up to 10 credits</p>
       </div>
       <button onclick="closeFeedbackModal()" class="text-gray-500 hover:text-white text-xl leading-none">✕</button>
     </div>
