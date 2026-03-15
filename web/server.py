@@ -156,8 +156,45 @@ def _upsert_env_file(env_path: Path, updates: dict[str, str]) -> None:
 
 @app.get("/api/changelog")
 async def get_changelog():
-    """Return changelog entries from web/changelog.json."""
+    """Return changelog entries from git log (auto-updated on every commit)."""
+    import re
+    import subprocess
     import json as _json
+
+    _PREFIX = re.compile(
+        r"^(feat|fix|chore|refactor|docs|test|style|perf|ci|build)(\([^)]+\))?:\s*",
+        re.IGNORECASE,
+    )
+    _SKIP = re.compile(
+        r"update changelog|merge (branch|pull)|co-authored|bump version",
+        re.IGNORECASE,
+    )
+
+    try:
+        result = subprocess.run(
+            ["git", "log", "--pretty=format:%ad|%s", "--date=short", "--no-merges", "-40"],
+            cwd=Path(__file__).parent.parent,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        entries = []
+        seen = set()
+        for line in result.stdout.splitlines():
+            date, sep, msg = line.partition("|")
+            if not sep or _SKIP.search(msg):
+                continue
+            text = _PREFIX.sub("", msg).strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            entries.append({"date": date.strip(), "text": text})
+        if entries:
+            return entries
+    except Exception:
+        pass
+
+    # Fallback: static file
     p = Path(__file__).parent / "changelog.json"
     if p.exists():
         return _json.loads(p.read_text())
