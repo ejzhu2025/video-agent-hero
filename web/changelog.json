@@ -1,4 +1,8 @@
 [
+  {"date": "2026-03-15", "text": "Storyboard upgrade — 5 modern TikTok hook archetypes, action-verb scene descriptions, contrast/tension beats"},
+  {"date": "2026-03-15", "text": "Pipeline timing logs — Director/Storyboard/Critic/Compiler each log LLM call duration for analysis"},
+  {"date": "2026-03-15", "text": "Wait time hints — spinner shows 'usually takes X minutes' for slow stages"},
+  {"date": "2026-03-15", "text": "User isolation — projects scoped by user, only owner can view or modify"},
   {"date": "2026-03-14", "text": "Turso cloud SQLite — credits now persist across server restarts"},
   {"date": "2026-03-14", "text": "Google OAuth — stateless HMAC state token, survives restarts"},
   {"date": "2026-03-14", "text": "Replicate 429 auto-retry with backoff"},
