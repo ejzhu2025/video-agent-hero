@@ -3,47 +3,84 @@ _HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Video Agent Hero</title>
+<title>AdReel</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-  body { background: #0d1117; color: #c9d1d9; font-family: system-ui, sans-serif; }
-  .sidebar { background: #161b22; border-right: 1px solid #30363d; }
-  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; }
-  .card-hover:hover { border-color: #58a6ff; cursor: pointer; }
-  .btn-primary { background: #238636; color: #fff; border: 1px solid #2ea043; }
-  .btn-primary:hover { background: #2ea043; }
-  .btn-secondary { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }
-  .btn-secondary:hover { background: #30363d; }
-  .btn-danger { background: #da3633; color: #fff; border: 1px solid #f85149; }
-  .btn-danger:hover { background: #f85149; }
-  .btn-approve { background: #1f6feb; color: #fff; border: 1px solid #388bfd; }
-  .btn-approve:hover { background: #388bfd; }
-  .status-done { color: #3fb950; }
-  .status-running { color: #d29922; }
-  .status-failed { color: #f85149; }
-  .status-pending { color: #8b949e; }
-  .node-card { border-left: 3px solid #30363d; }
-  .node-card.running { border-left-color: #d29922; }
-  .node-card.done { border-left-color: #3fb950; }
-  .node-card.error { border-left-color: #f85149; }
-  .log-code { background: #0d1117; border: 1px solid #30363d; font-family: monospace; font-size: 12px; }
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-track { background: #161b22; }
-  ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
-  .spinner { animation: spin 1s linear infinite; display: inline-block; }
-  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-  .fade-in { animation: fadeIn 0.3s ease-in; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-  input, textarea, select { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 6px; }
-  input:focus, textarea:focus, select:focus { outline: none; border-color: #58a6ff; }
-  .chip { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 9999px;
-    font-size: 12px; cursor: pointer; border: 1px solid #30363d; background: #21262d;
-    color: #8b949e; transition: all 0.15s; user-select: none; }
-  .chip:hover { border-color: #58a6ff; color: #c9d1d9; }
-  .chip.selected { background: #0d419d; border-color: #388bfd; color: #79c0ff; }
-  .chat-input { background: #161b22; border: 1px solid #30363d; border-radius: 12px; }
-  .chat-input:focus-within { border-color: #58a6ff; }
-  .approve-bar { background: #0d2136; border: 1px solid #1f6feb; border-radius: 10px; }
+  /* ── Apple-inspired dark mode design system ── */
+  :root {
+    --bg:        #000000;
+    --surface:   #1c1c1e;
+    --surface2:  #2c2c2e;
+    --surface3:  #3a3a3c;
+    --sep:       #38383a;
+    --text:      #ffffff;
+    --text2:     #8e8e93;
+    --text3:     #636366;
+    --blue:      #0a84ff;
+    --green:     #30d158;
+    --red:       #ff453a;
+    --yellow:    #ffd60a;
+    --radius:    14px;
+    --radius-sm: 10px;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+  .sidebar { background: var(--surface); border-right: 1px solid var(--sep); }
+  .card { background: var(--surface); border: 1px solid var(--sep); border-radius: var(--radius); }
+  .card-hover:hover { border-color: var(--blue); cursor: pointer; }
+  .btn-primary { background: var(--green); color: #000; border: none; font-weight: 600; }
+  .btn-primary:hover { background: #28c250; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--sep); }
+  .btn-secondary:hover { background: var(--surface3); }
+  .btn-danger { background: var(--red); color: #fff; border: none; }
+  .btn-danger:hover { opacity: 0.85; }
+  .btn-approve { background: var(--blue); color: #fff; border: none; font-weight: 600; }
+  .btn-approve:hover { opacity: 0.85; }
+  .status-done { color: var(--green); }
+  .status-running { color: var(--yellow); }
+  .status-failed { color: var(--red); }
+  .status-pending { color: var(--text3); }
+  /* Activity pills */
+  .activity-pill { display:inline-flex; align-items:center; gap:6px; padding:4px 12px 4px 10px;
+    border-radius:20px; font-size:12px; border:1px solid var(--sep); background:var(--surface);
+    color:var(--text2); margin:2px 0; max-width:100%; }
+  .activity-pill.running { border-color:var(--surface3); background:var(--surface2); color:var(--text); }
+  .activity-pill.error { border-color:#5a1515; background:#1a0a0a; color:var(--red); }
+  .activity-pill .pill-icon { font-size:13px; flex-shrink:0; }
+  .activity-pill .pill-label { font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .activity-pill .pill-meta { color:var(--text3); font-size:11px; flex-shrink:0; margin-left:4px; }
+  .activity-phase { font-size:11px; font-weight:600; color:var(--text3); text-transform:uppercase;
+    letter-spacing:.06em; padding:8px 2px 4px; }
+  .log-code { background:var(--bg); border:1px solid var(--sep); font-family:monospace; font-size:12px; }
+  ::-webkit-scrollbar { width:5px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--surface3); border-radius:3px; }
+  .spinner { animation:spin 1s linear infinite; display:inline-block; }
+  @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+  .fade-in { animation:fadeIn 0.25s ease-out; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+  input, textarea, select {
+    background: var(--surface2); border: 1px solid var(--sep);
+    color: var(--text); border-radius: var(--radius-sm);
+  }
+  input::placeholder, textarea::placeholder { color: var(--text3); }
+  input:focus, textarea:focus, select:focus { outline:none; border-color:var(--blue); }
+  .chip { display:inline-flex; align-items:center; padding:3px 11px; border-radius:9999px;
+    font-size:12px; cursor:pointer; border:1px solid var(--sep); background:var(--surface2);
+    color:var(--text2); transition:all .15s; user-select:none; }
+  .chip:hover { border-color:var(--blue); color:var(--text); }
+  .chip.selected { background:rgba(10,132,255,.18); border-color:var(--blue); color:var(--blue); }
+  .chat-input { background:var(--surface); border:1px solid var(--sep); border-radius:var(--radius); }
+  .chat-input:focus-within { border-color:var(--blue); }
+  .approve-bar { background:rgba(10,132,255,.12); border:1px solid rgba(10,132,255,.35); border-radius:var(--radius-sm); }
+  /* URL import bar */
+  .url-bar { background:var(--surface2); border:1px solid var(--sep); border-radius:var(--radius); transition:border-color .2s; }
+  .url-bar:focus-within { border-color:var(--blue); }
+  /* Product card (after scrape) */
+  .product-card { background:var(--surface2); border:1px solid var(--sep); border-radius:var(--radius); }
+  /* Tab bar */
+  .tab-btn { color:var(--text3); transition:color .15s; }
+  .tab-btn.active { color:var(--blue) !important; border-color:var(--blue) !important; }
 </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden">
@@ -58,11 +95,10 @@ _HTML = r"""<!DOCTYPE html>
   </div>
   <button onclick="document.getElementById('update-banner').remove()" class="ml-3 shrink-0 text-indigo-600 hover:text-indigo-300">✕</button>
 </div>
-<header class="flex items-center justify-between px-5 py-3 border-b border-gray-800 flex-shrink-0">
-  <div class="flex items-center gap-3">
-    <span class="text-xl">🎬</span>
-    <h1 class="text-base font-semibold text-white">Video Agent Hero</h1>
-    <span class="text-xs px-2 py-0.5 rounded-full bg-gray-800 text-gray-400">LangGraph</span>
+<header class="flex items-center justify-between px-5 py-3 border-b flex-shrink-0" style="border-color:var(--sep)">
+  <div class="flex items-center gap-2.5">
+    <span class="text-lg">🎬</span>
+    <h1 class="text-sm font-semibold tracking-tight" style="color:var(--text)">AdReel</h1>
   </div>
   <div class="flex gap-2 items-center">
     <button onclick="newVideo()" class="btn-secondary text-xs px-3 py-1.5 rounded-md flex items-center gap-1">
@@ -147,7 +183,7 @@ _HTML = r"""<!DOCTYPE html>
     <!-- Generic balance row (shown when opened from credits button) -->
     <div id="topup-balance-row" class="flex items-center justify-between mb-4 text-xs text-gray-400">
       <span>Current balance: <span id="topup-balance" class="text-yellow-400 font-medium">0</span> credits</span>
-      <span class="text-gray-600">1 credit = 1 turbo shot &nbsp;·&nbsp; 3 credits = 1 HD shot</span>
+      <span class="text-gray-600">1 credit = 1 shot</span>
     </div>
     <div id="topup-plans" class="grid grid-cols-3 gap-3 mb-5"></div>
     <p class="text-xs text-gray-600 text-center">Payments processed securely by Stripe. No subscription.</p>
@@ -230,7 +266,19 @@ _HTML = r"""<!DOCTYPE html>
       <button onclick="closeSettings()" class="text-gray-500 hover:text-gray-300 text-lg leading-none">✕</button>
     </div>
     <div class="mb-4">
-      <label class="text-sm text-gray-400 mb-2 block">Anthropic API Key</label>
+      <label class="text-sm text-gray-400 mb-2 block">Google API Key <span class="text-blue-400 text-xs font-normal">(Gemini 2.0 — primary LLM + concept images)</span></label>
+      <div class="relative">
+        <input id="google-key-input" type="password" class="w-full text-sm p-2.5 pr-10 font-mono"
+          placeholder="AIza…" autocomplete="off"/>
+        <button onclick="toggleGoogleKeyVisibility()" class="absolute right-2.5 top-2.5 text-gray-500 hover:text-gray-300 text-sm">👁</button>
+      </div>
+      <p id="google-key-current" class="text-xs text-gray-600 mt-1.5"></p>
+      <p class="text-xs text-gray-600 mt-1">
+        Powers Gemini 2.0 Flash for planning + interleaved storyboard concept images.
+      </p>
+    </div>
+    <div class="mb-4">
+      <label class="text-sm text-gray-400 mb-2 block">Anthropic API Key <span class="text-gray-600 text-xs font-normal">(fallback LLM)</span></label>
       <div class="relative">
         <input id="api-key-input" type="password" class="w-full text-sm p-2.5 pr-10 font-mono"
           placeholder="sk-ant-api03-…" autocomplete="off"/>
@@ -238,7 +286,7 @@ _HTML = r"""<!DOCTYPE html>
       </div>
       <p id="api-key-current" class="text-xs text-gray-600 mt-1.5"></p>
       <p class="text-xs text-gray-600 mt-1">
-        Used by the LLM Planner node. Without a key, the mock planner is used.
+        Used when Google API key is not set. Without either key, mock planner is used.
       </p>
     </div>
     <div class="mb-4">
@@ -388,15 +436,9 @@ _HTML = r"""<!DOCTYPE html>
   <div id="project-list" class="flex-1 overflow-y-auto p-2 space-y-1" style="min-height:0">
     <p class="text-xs text-gray-500 text-center pt-4">Loading...</p>
   </div>
-  <!-- Brand Kits section -->
-  <div class="border-t border-gray-800 flex-shrink-0">
-    <div class="flex items-center justify-between px-3 py-2">
-      <span class="text-xs text-gray-500 font-medium">Brand Kits</span>
-      <button onclick="openNewBrandKitModal()" class="text-xs text-blue-400 hover:text-blue-300 leading-none">+ New</button>
-    </div>
-    <div id="brand-kit-list" class="px-2 pb-2 space-y-1 max-h-36 overflow-y-auto">
-      <p class="text-xs text-gray-600 text-center py-1">Loading...</p>
-    </div>
+  <!-- Brand Kits section (hidden) -->
+  <div class="hidden">
+    <div id="brand-kit-list"></div>
   </div>
 </aside>
 
@@ -470,58 +512,92 @@ _HTML = r"""<!DOCTYPE html>
       </div>
 
       <!-- Chat bar -->
-      <div id="chat-bar" class="px-4 py-3 border-t border-gray-800 flex-shrink-0">
-        <!-- Chips row -->
-        <div id="chips-row" class="flex items-center gap-1.5 mb-2 flex-wrap">
-          <span class="text-xs text-gray-600 mr-1">Aspect:</span>
-          <span class="chip selected" data-aspect="9:16" onclick="selectAspect(this)">9:16 ↕</span>
-          <span class="chip" data-aspect="16:9" onclick="selectAspect(this)">16:9 ↔</span>
-          <span class="chip" data-aspect="1:1" onclick="selectAspect(this)">1:1 ▣</span>
-          <span class="text-gray-700 mx-1">|</span>
-          <span class="text-xs text-gray-600 mr-1">Duration:</span>
-          <span class="chip selected" data-dur="5" onclick="selectDuration(this)">5s</span>
-          <span class="chip" data-dur="10" onclick="selectDuration(this)">10s</span>
-          <span class="text-gray-700 mx-1">|</span>
-          <span class="text-xs text-gray-600 mr-1">Quality:</span>
-          <span class="chip selected" data-quality="turbo" onclick="selectQuality(this)" title="Fast preview, 480p ~2s clips">⚡ Turbo</span>
-          <span class="chip" data-quality="hd" onclick="selectQuality(this)" title="HD 720p ~5s clips, costs 3× credits">✦ HD</span>
-          <span class="text-gray-700 mx-1">|</span>
-          <span class="text-xs text-gray-600 mr-1">Brand:</span>
-          <select id="brand-select" class="text-xs px-2 py-0.5 rounded"
-            style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9"
-            onchange="selectedBrandId = this.value">
-            <option value="tong_sui">Tong Sui</option>
-          </select>
+      <div id="chat-bar" class="px-4 py-3 border-t flex-shrink-0 space-y-2" style="border-color:var(--sep)">
+
+        <!-- URL import bar -->
+        <div class="url-bar flex items-center gap-2 px-3 py-2">
+          <span style="color:var(--text3)" class="text-base flex-shrink-0">🔗</span>
+          <input id="url-input" type="url"
+            class="flex-1 text-sm bg-transparent border-none outline-none"
+            placeholder="Paste product link (Amazon, Shopify…)"
+            style="color:var(--text)"
+            onkeydown="if(event.key==='Enter') handleChatSend()"
+          />
+          <span id="url-loading" class="hidden text-xs" style="color:var(--text3)">Fetching…</span>
         </div>
-        <!-- Product image preview (shown when attached) -->
-        <div id="product-preview-bar" class="hidden flex items-center gap-2 mb-2 px-1">
-          <img id="product-preview-img" src="" alt="product" class="h-10 w-10 object-cover rounded border border-gray-600"/>
-          <div class="flex-1">
-            <p class="text-xs text-gray-400" id="product-preview-name"></p>
-            <p class="text-xs text-gray-600">Product image — will be used for ad outro</p>
+
+        <!-- Product card (shown after successful scrape) -->
+        <div id="product-card" class="hidden product-card flex items-center gap-3 px-3 py-2.5">
+          <img id="product-card-img" src="" alt="" class="w-12 h-12 object-cover rounded-lg flex-shrink-0" style="border:1px solid var(--sep)"/>
+          <div class="flex-1 min-w-0">
+            <p id="product-card-name" class="text-xs font-semibold truncate" style="color:var(--text)"></p>
+            <p id="product-card-features" class="text-xs mt-0.5 line-clamp-2" style="color:var(--text2)"></p>
           </div>
-          <button onclick="clearProductImage()" class="text-gray-600 hover:text-gray-300 text-sm">✕</button>
+          <button onclick="clearProductCard()" class="flex-shrink-0 text-lg leading-none" style="color:var(--text3)">✕</button>
         </div>
-        <!-- Input row -->
-        <div class="chat-input flex items-end gap-2 px-3 py-2">
-          <!-- Hidden file input -->
-          <input id="product-file-input" type="file" accept="image/*" class="hidden" onchange="handleProductImageSelect(this)"/>
-          <button id="attach-btn" onclick="document.getElementById('product-file-input').click()"
-            title="Attach product image"
-            class="text-gray-500 hover:text-gray-300 text-lg flex-shrink-0 self-end pb-1 transition-colors" style="line-height:1">
-            📎
-          </button>
-          <textarea id="chat-input" rows="2"
-            class="flex-1 text-sm bg-transparent border-none outline-none resize-none text-gray-200"
-            placeholder="Describe your video..."
-            oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
-          <div class="flex-shrink-0 self-end flex flex-col items-end gap-0.5">
-            <span id="credit-estimate" class="text-xs text-gray-600 hidden"></span>
-            <button id="chat-send-btn" onclick="handleChatSend()"
-              class="btn-primary text-sm px-4 py-1.5 rounded-lg font-medium">
-              Send
+
+        <!-- Always-visible: Aspect + Duration + Generate -->
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <div id="chips-row" class="flex items-center gap-1.5 flex-wrap flex-1">
+            <span class="text-xs mr-1" style="color:var(--text3)">Aspect:</span>
+            <span class="chip selected" data-aspect="9:16" onclick="selectAspect(this)">9:16 ↕</span>
+            <span class="chip" data-aspect="16:9" onclick="selectAspect(this)">16:9 ↔</span>
+            <span class="chip" data-aspect="1:1" onclick="selectAspect(this)">1:1 ▣</span>
+            <span class="mx-1" style="color:var(--surface3)">|</span>
+            <span class="text-xs mr-1" style="color:var(--text3)">Duration:</span>
+            <span class="chip selected" data-dur="5" onclick="selectDuration(this)">5s</span>
+            <span class="chip" data-dur="10" onclick="selectDuration(this)">10s</span>
+            <span class="mx-1" style="color:var(--surface3)">|</span>
+            <button onclick="toggleAdvancedOptions()" id="advanced-toggle"
+              class="text-xs flex items-center gap-1 transition-colors chip"
+              style="color:var(--text3)">
+              <span id="advanced-toggle-icon" style="font-size:9px">▶</span> More
             </button>
           </div>
+          <button id="chat-send-btn" onclick="handleChatSend()"
+            class="btn-primary text-sm px-5 py-1.5 rounded-xl font-semibold flex-shrink-0">
+            Generate
+          </button>
+        </div>
+
+        <!-- Advanced options (hidden by default): Brand kit + Description -->
+        <div id="advanced-options" class="hidden space-y-2">
+
+          <!-- Brand kit (hidden) -->
+          <select id="brand-select" class="hidden" onchange="selectedBrandId = this.value">
+            <option value="tong_sui">Tong Sui</option>
+          </select>
+
+          <!-- Product image preview (shown when file attached) -->
+          <div id="product-preview-bar" class="hidden flex items-center gap-2 px-1">
+            <img id="product-preview-img" src="" alt="product" class="h-9 w-9 object-cover rounded-lg" style="border:1px solid var(--sep)"/>
+            <div class="flex-1">
+              <p class="text-xs font-medium" id="product-preview-name" style="color:var(--text)"></p>
+              <p class="text-xs" style="color:var(--text3)">Product image attached</p>
+            </div>
+            <button onclick="clearProductImage()" class="text-lg leading-none" style="color:var(--text3)">✕</button>
+          </div>
+
+          <!-- Description textarea -->
+          <div class="chat-input flex items-end gap-2 px-3 py-2">
+            <input id="product-file-input" type="file" accept="image/*" class="hidden" onchange="handleProductImageSelect(this)"/>
+            <button id="attach-btn" onclick="document.getElementById('product-file-input').click()"
+              title="Attach product image"
+              class="text-lg flex-shrink-0 self-end pb-1 transition-colors" style="color:var(--text3);line-height:1">
+              📎
+            </button>
+            <textarea id="chat-input" rows="2"
+              class="flex-1 text-sm bg-transparent border-none outline-none resize-none"
+              style="color:var(--text)"
+              placeholder="Add extra instructions or describe your video…"
+              oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
+            <span id="credit-estimate" class="text-xs hidden self-end pb-2" style="color:var(--text3)"></span>
+            <button id="chat-send-btn-inline" onclick="handleChatSend()"
+              class="hidden btn-primary text-sm px-4 py-1.5 rounded-xl font-semibold flex-shrink-0 self-end">
+              Modify
+            </button>
+          </div>
+
         </div>
       </div>
 
@@ -557,23 +633,27 @@ let selectedAspect = '9:16';
 let selectedBrandId = 'tong_sui';
 let selectedQuality = 'turbo';
 
-// ── Node metadata ──────────────────────────────────────────────────────────
+// ── Node metadata (user-facing labels, no LangGraph internals) ─────────────
+// hidden:true = run silently, don't show a pill to the user
 const NODE_META = {
-  intent_parser:        { icon: '🔍', label: 'Intent Parser',       desc: 'Extracting hints from brief' },
-  memory_loader:        { icon: '🧠', label: 'Memory Loader',       desc: 'Loading brand kit & preferences' },
-  clarification_planner:{ icon: '❓', label: 'Clarification Planner', desc: 'Checking required fields' },
-  ask_user:             { icon: '💬', label: 'Ask User',            desc: 'Collecting clarification answers' },
-  planner_llm:          { icon: '✨', label: 'LLM Planner',         desc: 'Generating video plan with AI' },
-  plan_checker:         { icon: '✅', label: 'Plan Checker',        desc: 'Validating & fixing plan' },
-  change_classifier:    { icon: '🔀', label: 'Change Classifier',   desc: 'Analyzing modification scope' },
-  partial_executor:     { icon: '🎯', label: 'Partial Re-render',   desc: 'Regenerating affected shots only' },
-  executor_pipeline:    { icon: '🎬', label: 'Video Renderer',      desc: 'Rendering video clips' },
-  caption_agent:        { icon: '📝', label: 'Caption Agent',       desc: 'Generating caption segments' },
-  layout_branding:      { icon: '🎨', label: 'Layout & Branding',   desc: 'Applying subtitles & watermark' },
-  quality_gate:         { icon: '🔎', label: 'Quality Gate',        desc: 'Checking output quality' },
-  render_export:        { icon: '📤', label: 'Export',              desc: 'Final H.264 video export' },
-  result_summarizer:    { icon: '📊', label: 'Result Summarizer',   desc: 'Generating run summary' },
-  memory_writer:        { icon: '💾', label: 'Memory Writer',       desc: 'Saving to DB & vector store' },
+  _scrape:              { icon: '🔗', label: 'Fetching product info from URL' },
+  intent_parser:        { icon: '◎', label: 'Reading your brief' },
+  memory_loader:        { icon: '◎', label: 'Loading brand kit',        hidden: true },
+  clarification_planner:{ icon: '◎', label: 'Checking requirements',    hidden: true },
+  ask_user:             { icon: '💬', label: 'Waiting for your answers' },
+  planner_llm:          { icon: '✦', label: 'Gemini is creating your storyboard' },
+  plan_checker:         { icon: '◎', label: 'Reviewing the plan',       hidden: true },
+  change_classifier:    { icon: '◎', label: 'Analyzing your feedback' },
+  partial_executor:     { icon: '◎', label: 'Re-rendering affected scenes' },
+  executor_pipeline:    { icon: '▶', label: 'Rendering video clips' },
+  caption_agent:        { icon: '◎', label: 'Adding captions',          hidden: true },
+  layout_branding:      { icon: '◎', label: 'Applying brand style',     hidden: true },
+  quality_gate:         { icon: '◎', label: 'Checking quality',         hidden: true },
+  qc_diagnose:          { icon: '⚠', label: 'Quality issue detected' },
+  relevance_rerender:   { icon: '◎', label: 'Improving scene quality' },
+  render_export:        { icon: '◎', label: 'Exporting video',          hidden: true },
+  result_summarizer:    { icon: '◎', label: 'Finishing up',             hidden: true },
+  memory_writer:        { icon: '◎', label: 'Saving project',           hidden: true },
 };
 
 function getNodeSummary(node, data) {
@@ -582,77 +662,34 @@ function getNodeSummary(node, data) {
       case 'intent_parser': {
         const a = data.clarification_answers || {};
         const parts = [];
-        if (a.platform) parts.push(`platform: ${a.platform}`);
+        if (a.platform) parts.push(a.platform);
         if (a.duration_sec) parts.push(`${a.duration_sec}s`);
-        if (a.style_tone) parts.push(Array.isArray(a.style_tone) ? a.style_tone.join(', ') : a.style_tone);
-        return parts.length ? parts.join(' · ') : 'Brief parsed';
+        return parts.join(' · ') || '';
       }
-      case 'memory_loader': {
-        const bk = data.brand_kit || {};
-        const sim = (data.similar_projects || []).length;
-        return `Brand: ${bk.name || bk.brand_id || '—'} · ${sim} similar project${sim !== 1 ? 's' : ''}`;
-      }
-      case 'clarification_planner': {
-        if (data.clarification_needed) {
-          const n = (data.clarification_questions || []).length;
-          return `${n} question${n !== 1 ? 's' : ''} needed — routing to ask_user`;
-        }
-        return 'All fields answered — proceeding to planner';
-      }
-      case 'ask_user':
-        return 'Clarification answers collected';
       case 'planner_llm': {
         const plan = data.plan || {};
         const shots = (plan.shot_list || []).length;
         const hook = plan.script?.hook || '';
-        const v = data.plan_version || 1;
-        return `v${v} · ${shots} shots · ${plan.platform || '?'} · ${plan.duration_sec || '?'}s` +
-          (hook ? ` · "${hook.slice(0, 50)}${hook.length > 50 ? '…' : ''}"` : '');
-      }
-      case 'plan_checker': {
-        if (data.needs_replan) return '⚠ Issues found — triggering replan';
-        const shots = (data.plan?.shot_list || []).length;
-        return `✓ Plan valid · ${shots} shots`;
+        const imgs = Object.keys(plan.concept_images || {}).length;
+        let s = `${shots} scenes`;
+        if (hook) s += ` · "${hook.slice(0, 45)}${hook.length > 45 ? '…' : ''}"`;
+        if (imgs) s += ` · ${imgs} concept images`;
+        return s;
       }
       case 'executor_pipeline': {
         const clips = (data.scene_clips || []).length;
-        return `${clips} clip${clips !== 1 ? 's' : ''} rendered`;
-      }
-      case 'caption_agent': {
-        const segs = (data.caption_segments || []).length;
-        return `${segs} caption segment${segs !== 1 ? 's' : ''} generated`;
-      }
-      case 'layout_branding': {
-        const p = data.branded_clip_path || '';
-        return p ? `Branded: ${p.split('/').pop()}` : 'Branding applied';
-      }
-      case 'quality_gate': {
-        const qr = data.quality_result || {};
-        if (qr.passed) return '✓ All QC checks passed';
-        const issues = (qr.issues || []).join(', ');
-        return `⚠ ${issues || 'Issues found'}${qr.auto_fix_applied ? ' (auto-fixed)' : ''}`;
-      }
-      case 'render_export': {
-        const p = data.output_path || '';
-        return p ? `📁 ${p.split('/').pop()}` : 'Export complete';
-      }
-      case 'result_summarizer': {
-        const s = data.summary || '';
-        return s ? s.slice(0, 100) + (s.length > 100 ? '…' : '') : 'Summary generated';
+        return clips ? `${clips} scenes rendered` : '';
       }
       case 'change_classifier': {
         const ct = data.change_type;
-        const shots = (data.affected_shot_indices || []);
-        if (ct === 'local') return `Local change — re-rendering shot${shots.length !== 1 ? 's' : ''} [${shots.join(', ')}]`;
-        return 'Global change — replanning entire video';
+        const n = (data.affected_shot_indices || []).length;
+        if (ct === 'local') return `Updating ${n} scene${n !== 1 ? 's' : ''}`;
+        return 'Replanning entire video';
       }
       case 'partial_executor': {
         const clips = (data.scene_clips || []).length;
-        const affected = (data.messages || []).find(m => m.content?.includes('partial_executor'));
-        return clips ? `${clips} clips ready (partial re-render)` : 'Partial re-render complete';
+        return clips ? `${clips} scenes updated` : '';
       }
-      case 'memory_writer':
-        return 'Saved to SQLite & ChromaDB vector store';
       default:
         return '';
     }
@@ -737,26 +774,73 @@ function updateCreditEstimate() {
 // ── App state machine ──────────────────────────────────────────────────────
 function setAppState(state) {
   appState = state;
-  const input = document.getElementById('chat-input');
-  const sendBtn = document.getElementById('chat-send-btn');
-  const chipsRow = document.getElementById('chips-row');
-  const approveBar = document.getElementById('approve-bar');
+  const input          = document.getElementById('chat-input');
+  const sendBtn        = document.getElementById('chat-send-btn');
+  const sendBtnInline  = document.getElementById('chat-send-btn-inline');
+  const chipsRow       = document.getElementById('chips-row');
+  const approveBar     = document.getElementById('approve-bar');
+  const urlBarEl       = document.querySelector('.url-bar');
+  const advPanel       = document.getElementById('advanced-options');
+  const advIcon        = document.getElementById('advanced-toggle-icon');
 
+  // ── State config ──────────────────────────────────────────────────────────
+  // urlBar:       show the product URL import row
+  // chips:        show aspect/duration chips + More toggle
+  // approve:      show the Approve & Generate bar
+  // openAdv:      auto-open the advanced panel (textarea visible)
+  // sendLabel:    label on the main (chips-row) action button
+  // sendHidden:   hide the chips-row button entirely
+  // inlineLabel:  label on the inline textarea button (null = hidden)
+  // disabled:     disable inputs
   const cfg = {
-    idle:       { placeholder: 'Describe your video...', sendLabel: 'Send',   chips: true,  approve: false, inputDisabled: false },
-    planning:   { placeholder: 'Planning…',              sendLabel: '…',      chips: false, approve: false, inputDisabled: true  },
-    plan_ready: { placeholder: 'Ask to change the plan...', sendLabel: 'Replan', chips: true, approve: true, inputDisabled: false },
-    executing:  { placeholder: 'Generating…',            sendLabel: '…',      chips: false, approve: false, inputDisabled: true  },
-    done:       { placeholder: 'Modify this video...',   sendLabel: 'Modify', chips: true,  approve: false, inputDisabled: false },
-    error:      { placeholder: 'Describe your video...', sendLabel: 'Send',   chips: true,  approve: false, inputDisabled: false },
-  }[state] || { placeholder: '', sendLabel: 'Send', chips: true, approve: false, inputDisabled: false };
+    idle:       { urlBar: true,  chips: true,  approve: false, openAdv: false, sendLabel: 'Generate', sendHidden: false, inlineLabel: null,     disabled: false,
+                  placeholder: 'Add a description (optional)…' },
+    planning:   { urlBar: false, chips: false, approve: false, openAdv: false, sendLabel: '…',        sendHidden: true,  inlineLabel: null,     disabled: true,
+                  placeholder: 'Planning…' },
+    plan_ready: { urlBar: false, chips: false, approve: true,  openAdv: true,  sendLabel: 'Replan',   sendHidden: true,  inlineLabel: 'Replan', disabled: false,
+                  placeholder: 'Request changes to the plan…' },
+    executing:  { urlBar: false, chips: false, approve: false, openAdv: false, sendLabel: '…',        sendHidden: true,  inlineLabel: null,     disabled: true,
+                  placeholder: 'Generating…' },
+    done:       { urlBar: false, chips: false, approve: false, openAdv: true,  sendLabel: 'Modify',   sendHidden: true,  inlineLabel: 'Modify', disabled: false,
+                  placeholder: 'Describe changes to the video…' },
+    error:      { urlBar: true,  chips: true,  approve: false, openAdv: false, sendLabel: 'Generate', sendHidden: false, inlineLabel: null,     disabled: false,
+                  placeholder: 'Add a description (optional)…' },
+  }[state] || { urlBar: true, chips: true, approve: false, openAdv: false, sendLabel: 'Generate', sendHidden: false, inlineLabel: null, disabled: false, placeholder: '' };
 
+  // Apply
   input.placeholder = cfg.placeholder;
-  input.disabled = cfg.inputDisabled;
+  input.disabled    = cfg.disabled;
   sendBtn.textContent = cfg.sendLabel;
-  sendBtn.disabled = cfg.inputDisabled;
-  chipsRow.classList.toggle('hidden', !cfg.chips);
+  sendBtn.disabled    = cfg.disabled;
+  sendBtn.classList.toggle('hidden', cfg.sendHidden);
+
+  if (sendBtnInline) {
+    if (cfg.inlineLabel) {
+      sendBtnInline.textContent = cfg.inlineLabel;
+      sendBtnInline.disabled = cfg.disabled;
+      sendBtnInline.classList.remove('hidden');
+    } else {
+      sendBtnInline.classList.add('hidden');
+    }
+  }
+
+  chipsRow.classList.toggle('hidden',  !cfg.chips);
   approveBar.classList.toggle('hidden', !cfg.approve);
+  if (urlBarEl) urlBarEl.classList.toggle('hidden', !cfg.urlBar);
+
+  // Advanced panel (textarea) — auto-open in plan_ready / done so textarea is always accessible
+  if (advPanel) {
+    if (cfg.openAdv && advPanel.classList.contains('hidden')) {
+      advPanel.classList.remove('hidden');
+      if (advIcon) advIcon.textContent = '▼';
+    }
+    // Auto-close when returning to idle/error so the UI stays clean
+    if (cfg.urlBar && !advPanel.classList.contains('hidden')) {
+      advPanel.classList.add('hidden');
+      if (advIcon) advIcon.textContent = '▶';
+    }
+  }
+
   updateCreditEstimate();
 }
 
@@ -905,6 +989,119 @@ function clearProductImage() {
   document.getElementById('attach-btn').classList.remove('text-blue-400');
 }
 
+// ── Product URL import ────────────────────────────────────────────────────
+let _scrapedImagePath = null;
+let _scrapedProductName = '';
+let _scrapedProductInfo = null;   // full scraped object: key_features, emotional_hook, etc.
+let _scrapedProductCategory = ''; // e.g. "luxury jewelry"
+
+async function importProductUrl() {
+  const input = document.getElementById('url-input');
+  const loading = document.getElementById('url-loading');
+  const sendBtn = document.getElementById('chat-send-btn');
+  const url = input.value.trim();
+  if (!url) return;
+
+  loading.classList.remove('hidden');
+  sendBtn.disabled = true;
+
+  try {
+    const data = await api('POST', '/api/scrape-product', { url });
+
+    if (data.error) {
+      toast('Could not read that page — please describe your product below instead.', 'error');
+      _fallbackToDescriptionMode();
+      return;
+    }
+
+    // Show product card
+    const card = document.getElementById('product-card');
+    const cardImg = document.getElementById('product-card-img');
+    const cardName = document.getElementById('product-card-name');
+    const cardFeatures = document.getElementById('product-card-features');
+
+    _scrapedProductName = data.product_name || '';
+    _scrapedProductInfo = data;
+    _scrapedProductCategory = data.product_category || '';
+    cardName.textContent = _scrapedProductName || 'Product';
+    cardFeatures.textContent = (data.key_features || []).join(' · ') || data.emotional_hook || '';
+
+    if (data.image_url) {
+      cardImg.src = data.image_url;
+      cardImg.classList.remove('hidden');
+    } else {
+      cardImg.classList.add('hidden');
+    }
+    card.classList.remove('hidden');
+
+    // Auto-fill brief textarea — brief text only (selling points go via product_info, not textarea)
+    // This keeps the textarea clean; user can still edit/override freely
+    const chatInput = document.getElementById('chat-input');
+    chatInput.value = data.brief || '';
+    chatInput.dataset.scrapedBrief = data.brief || '';  // remember original for priority check
+    chatInput.style.height = 'auto';
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+
+    // Save scraped image path so it gets used as product_image_path
+    _scrapedImagePath = data.image_path || null;
+
+    // Show product image preview bar if we have an image
+    if (data.image_url) {
+      document.getElementById('product-preview-img').src = data.image_url;
+      document.getElementById('product-preview-name').textContent = data.product_name || '';
+      document.getElementById('product-preview-bar').classList.remove('hidden');
+    }
+
+    toast('Product imported — click Generate to create your video', 'success');
+  } catch (e) {
+    toast('Could not read that page — please describe your product below instead.', 'error');
+    _fallbackToDescriptionMode();
+  } finally {
+    loading.classList.add('hidden');
+    sendBtn.disabled = false;
+  }
+}
+
+function _fallbackToDescriptionMode() {
+  // Clear the URL input
+  const input = document.getElementById('url-input');
+  if (input) input.value = '';
+
+  // Open the advanced options panel so textarea is visible
+  const panel = document.getElementById('advanced-options');
+  const icon = document.getElementById('advanced-toggle-icon');
+  if (panel && panel.classList.contains('hidden')) {
+    panel.classList.remove('hidden');
+    if (icon) icon.textContent = '▼';
+  }
+
+  // Focus the textarea with a hint
+  const chatInput = document.getElementById('chat-input');
+  if (chatInput) {
+    chatInput.placeholder = 'Describe your product here…';
+    chatInput.focus();
+  }
+}
+
+function toggleAdvancedOptions() {
+  const panel = document.getElementById('advanced-options');
+  const icon = document.getElementById('advanced-toggle-icon');
+  const hidden = panel.classList.toggle('hidden');
+  icon.textContent = hidden ? '▶' : '▼';
+}
+
+function clearProductCard() {
+  document.getElementById('product-card').classList.add('hidden');
+  document.getElementById('url-input').value = '';
+  document.getElementById('product-preview-bar').classList.add('hidden');
+  _scrapedImagePath = null;
+  _scrapedProductName = '';
+  _scrapedProductInfo = null;
+  _scrapedProductCategory = '';
+  const chatInput = document.getElementById('chat-input');
+  if (chatInput) { chatInput.value = ''; delete chatInput.dataset.scrapedBrief; }
+}
+
 async function uploadProductImageForProject(projectId, file) {
   try {
     const fd = new FormData();
@@ -946,22 +1143,67 @@ function updateProjStrip(proj) {
 
 // ── Chat send handler ──────────────────────────────────────────────────────
 async function handleChatSend() {
-  const input = document.getElementById('chat-input');
-  const text = input.value.trim();
-  if (!text) return;
+  const urlInput = document.getElementById('url-input');
+  const textInput = document.getElementById('chat-input');
+  const sendBtn  = document.getElementById('chat-send-btn');
+  const url = urlInput.value.trim();
+  const text = textInput.value.trim();
 
-  if (appState === 'idle' || appState === 'error') {
-    input.value = '';
-    input.style.height = 'auto';
-    await createAndPlan(text);
-  } else if (appState === 'plan_ready') {
-    input.value = '';
-    input.style.height = 'auto';
+  // Immediately disable both buttons to prevent double-clicks
+  const sendBtnInline = document.getElementById('chat-send-btn-inline');
+  sendBtn.disabled = true;
+  if (sendBtnInline) sendBtnInline.disabled = true;
+  const origLabel = sendBtn.textContent;
+  sendBtn.textContent = '…';
+  if (sendBtnInline) sendBtnInline.textContent = '…';
+
+  const _restore = () => {
+    sendBtn.disabled = false; sendBtn.textContent = origLabel;
+    if (sendBtnInline) { sendBtnInline.disabled = false; sendBtnInline.textContent = origLabel; }
+  };
+
+  if (appState === 'plan_ready') {
+    if (!text) { _restore(); return; }
+    textInput.value = ''; textInput.style.height = 'auto';
     await replanWithText(text);
-  } else if (appState === 'done') {
-    input.value = '';
-    input.style.height = 'auto';
+    return;
+  }
+  if (appState === 'done') {
+    if (!text) { _restore(); return; }
+    textInput.value = ''; textInput.style.height = 'auto';
     await submitFeedback(text);
+    return;
+  }
+
+  // idle / error: URL import → plan
+  if (appState === 'idle' || appState === 'error') {
+    // Must have URL or text brief
+    if (!url && !text) { _restore(); return; }
+
+    // ── Immediately jump into planning UI so user sees activity ──────────
+    setAppState('planning');
+    clearAgentLog();
+    showAgentLog();
+
+    // If URL present and not yet imported, scrape first (shown in agent log)
+    if (url && !_scrapedImagePath && !document.getElementById('product-card').classList.contains('hidden') === false) {
+      addNodeSpinner('_scrape', 'Fetching product info…', 6);
+      try {
+        await importProductUrl();
+      } finally {
+        removeNodeSpinner('_scrape');
+      }
+      // If scrape failed, _fallbackToDescriptionMode() already ran — revert UI
+      if (!textInput.value.trim() && !_scrapedProductName) {
+        setAppState('idle');
+        clearAllSpinners();
+        return;
+      }
+    }
+
+    const brief = textInput.value.trim() || url;
+    textInput.value = ''; textInput.style.height = 'auto';
+    await createAndPlan(brief);
   }
 }
 
@@ -979,18 +1221,31 @@ async function createAndPlan(brief) {
       assets_available: 'none',
     };
 
-    const res = await api('POST', '/api/projects', { brief, brand_id: selectedBrandId, user_id: 'ej' });
+    const res = await api('POST', '/api/projects', { brief, brand_id: selectedBrandId, user_id: 'ej', title: _scrapedProductName });
     currentProjectId = res.project_id;
     _run_events_cache[currentProjectId] = [];
     await loadProjects();
 
-    // Upload pending product image (attached before project was created)
+    // Upload pending product image (file attachment takes priority over scraped image)
     if (pendingProductFile) {
       await uploadProductImageForProject(currentProjectId, pendingProductFile);
       clearProductImage();
+    } else if (_scrapedImagePath) {
+      // Tell backend to use the already-downloaded scraped image
+      await api('POST', `/api/projects/${currentProjectId}/product-image-path`,
+        { image_path: _scrapedImagePath }).catch(() => {});
+      _scrapedImagePath = null;
     }
 
-    await api('POST', `/api/projects/${currentProjectId}/plan`, { clarification_answers: answers });
+    // Pass scraped product info to enrich Director LLM — only when scrape was used
+    // (user text takes priority: if textarea was edited away from scraped brief, product_info still sent
+    //  but brief from DB is used; selling points are additive context, not replacement)
+    const planPayload = { clarification_answers: answers };
+    if (_scrapedProductInfo) {
+      planPayload.product_info = _scrapedProductInfo;
+      planPayload.product_category = _scrapedProductCategory;
+    }
+    await api('POST', `/api/projects/${currentProjectId}/plan`, planPayload);
     connectEventStream(currentProjectId, 'plan');
   } catch (e) {
     toast(e.message, 'error');
@@ -1176,6 +1431,12 @@ function connectEventStream(projectId, phase) {
 function handleEvent(event, projectId, phase) {
   if (event.type === 'node_start') {
     addNodeSpinner(event.node, event.timestamp, event.estimated_wait);
+  } else if (event.type === 'shot_progress') {
+    // Update executor spinner with real-time clip progress
+    const pct = Math.round(event.done / event.total * 100);
+    const bar = '█'.repeat(Math.round(pct / 10)) + '░'.repeat(10 - Math.round(pct / 10));
+    const el = document.getElementById('elapsed-executor_pipeline');
+    if (el) el.textContent = `${bar} ${event.done}/${event.total} clips`;
   } else if (event.type === 'node_done') {
     addNodeCard(event.node, event.data, event.stdout, event.timestamp);
     if (event.node === 'plan_checker' && event.data && event.data.plan) {
@@ -1218,6 +1479,7 @@ function handleEvent(event, projectId, phase) {
       }).catch(() => {});
     }
   } else if (event.type === 'error') {
+    clearAllSpinners();
     addErrorCard(event.message, event.traceback);
     setAppState('error');
     if (eventSource) { eventSource.close(); eventSource = null; }
@@ -1239,6 +1501,7 @@ function showAgentLog() {
 
 // ── Agent log rendering ────────────────────────────────────────────────────
 function clearAgentLog() {
+  clearAllSpinners();
   const log = document.getElementById('agent-log');
   log.innerHTML = '';
   log.classList.add('hidden');
@@ -1248,116 +1511,120 @@ function clearAgentLog() {
 // Spinner timers: node_name -> intervalId
 const _spinnerTimers = {};
 
+function clearAllSpinners() {
+  for (const [node, id] of Object.entries(_spinnerTimers)) {
+    clearInterval(id);
+    delete _spinnerTimers[node];
+    const el = document.getElementById(`spinner-${node}`);
+    if (el) el.remove();
+  }
+}
+
+function removeNodeSpinner(node) {
+  if (_spinnerTimers[node]) { clearInterval(_spinnerTimers[node]); delete _spinnerTimers[node]; }
+  const el = document.getElementById(`spinner-${node}`);
+  if (el) el.remove();
+}
+
 function addNodeSpinner(node, timestamp, estimatedWait) {
   const log = document.getElementById('agent-log');
+  const meta = NODE_META[node] || { icon: '◎', label: node };
+  if (meta.hidden) return; // don't show background-only steps
+
   showAgentLog();
-  // Remove any existing spinner for this node
   const existing = document.getElementById(`spinner-${node}`);
   if (existing) existing.remove();
 
-  const meta = NODE_META[node] || { icon: '⚙', label: node, desc: '' };
   const startTime = timestamp ? new Date(timestamp) : new Date();
-  const descText = estimatedWait ? `${meta.desc} · ⏱ ${estimatedWait}` : meta.desc;
 
-  const card = document.createElement('div');
-  card.className = 'node-card running card p-3 pl-4 fade-in';
-  card.id = `spinner-${node}`;
-  card.innerHTML = `
-    <div class="flex items-center justify-between gap-2">
-      <div class="flex items-center gap-2">
-        <span class="text-base">${meta.icon}</span>
-        <div>
-          <span class="text-sm font-medium text-white">${meta.label}</span>
-          <span class="text-xs text-gray-500 ml-2">${descText}</span>
-        </div>
-      </div>
-      <div class="flex items-center gap-2 flex-shrink-0">
-        <span id="elapsed-${node}" class="text-xs text-gray-600">0s</span>
-        <span class="spinner text-yellow-400">↻</span>
-      </div>
+  const waitHint = estimatedWait ? `<span class="pill-meta" style="color:var(--text3);margin-left:4px">${estimatedWait}</span>` : '';
+
+  const wrap = document.createElement('div');
+  wrap.id = `spinner-${node}`;
+  wrap.className = 'fade-in';
+  wrap.innerHTML = `
+    <div class="activity-pill running">
+      <span class="pill-icon">${meta.icon}</span>
+      <span class="pill-label">${meta.label}</span>
+      <span class="pill-meta" id="elapsed-${node}"></span>
+      ${waitHint}
+      <span class="spinner" style="color:#d29922;font-size:11px;margin-left:2px">↻</span>
     </div>`;
-  log.appendChild(card);
-  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  log.appendChild(wrap);
+  wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-  // Start elapsed timer
   if (_spinnerTimers[node]) clearInterval(_spinnerTimers[node]);
   _spinnerTimers[node] = setInterval(() => {
     const el = document.getElementById(`elapsed-${node}`);
     if (!el) { clearInterval(_spinnerTimers[node]); return; }
     const secs = Math.round((Date.now() - startTime) / 1000);
     el.textContent = secs >= 60 ? `${Math.floor(secs/60)}m${secs%60}s` : `${secs}s`;
-  }, 1000);
+  }, 500);
 }
 
 function addPlanDoneCard() {
   const log = document.getElementById('agent-log');
-  const card = document.createElement('div');
-  card.className = 'card p-3 fade-in border-blue-800 bg-blue-950/20';
-  card.innerHTML = `
-    <div class="flex items-center gap-2">
-      <span class="text-blue-400 text-lg">📋</span>
-      <div>
-        <p class="text-sm font-medium text-blue-400">Plan ready!</p>
-        <p class="text-xs text-gray-500">Review and edit the storyboard, then click Approve &amp; Generate →</p>
-      </div>
+  const wrap = document.createElement('div');
+  wrap.className = 'fade-in';
+  wrap.innerHTML = `
+    <div class="activity-pill" style="border-color:#1f6feb;background:#0d2136;color:#79c0ff">
+      <span style="font-size:13px">✦</span>
+      <span class="pill-label">Storyboard ready — review and approve to generate</span>
     </div>`;
-  log.appendChild(card);
-  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  log.appendChild(wrap);
+  wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function addNodeCard(node, data, stdout, timestamp) {
   const log = document.getElementById('agent-log');
-  const meta = NODE_META[node] || { icon: '⚙', label: node, desc: '' };
-  const summary = getNodeSummary(node, data || {});
-  const ts = timestamp ? new Date(timestamp).toLocaleTimeString() : '';
+  const meta = NODE_META[node] || { icon: '◎', label: node };
 
-  // Remove spinner for this node and stop its timer
-  const spinner = document.getElementById(`spinner-${node}`);
-  if (spinner) spinner.remove();
+  // Stop spinner timer
   if (_spinnerTimers[node]) { clearInterval(_spinnerTimers[node]); delete _spinnerTimers[node]; }
 
-  // Remove any existing "running" card for this node
-  const existing = document.getElementById(`node-${node}`);
-  if (existing) existing.remove();
+  // If hidden, just remove spinner silently
+  if (meta.hidden) {
+    const spinner = document.getElementById(`spinner-${node}`);
+    if (spinner) spinner.remove();
+    return;
+  }
 
-  const cardId = `node-${node}-${Date.now()}`;
-  const stdoutHtml = stdout ? `
-    <div class="mt-2">
-      <button onclick="toggleStdout('${cardId}')" class="text-xs text-gray-500 hover:text-gray-400">
-        ▸ Show output
-      </button>
-      <pre id="${cardId}-stdout" class="hidden log-code mt-1 p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap max-h-48 overflow-y-auto">${escHtml(stdout)}</pre>
-    </div>` : '';
+  const summary = getNodeSummary(node, data || {});
 
-  // Key data fields (show non-empty, exclude verbose ones)
-  const keyFields = getKeyFields(node, data);
-  const fieldsHtml = keyFields.length ? `
-    <div class="mt-2 flex flex-wrap gap-2">
-      ${keyFields.map(([k, v]) => `
-        <span class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded font-mono">${k}: ${escHtml(String(v))}</span>
-      `).join('')}
-    </div>` : '';
+  // Replace spinner pill with done pill (or create new one)
+  const spinnerId = `spinner-${node}`;
+  const spinnerWrap = document.getElementById(spinnerId);
 
-  const card = document.createElement('div');
-  card.className = 'node-card done card p-3 pl-4 fade-in';
-  card.id = cardId;
-  card.innerHTML = `
-    <div class="flex items-start justify-between gap-2">
-      <div class="flex items-center gap-2">
-        <span class="text-base">${meta.icon}</span>
-        <div>
-          <span class="text-sm font-medium text-white">${meta.label}</span>
-          <span class="text-xs text-gray-500 ml-2">${meta.desc}</span>
-        </div>
-      </div>
-      <span class="text-xs text-gray-600 flex-shrink-0">${ts}</span>
-    </div>
-    ${summary ? `<p class="text-xs text-gray-400 mt-1.5 ml-7">${escHtml(summary)}</p>` : ''}
-    ${fieldsHtml}
-    ${stdoutHtml}
-  `;
-  log.appendChild(card);
-  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  // Compute elapsed from spinner's start time stored in dataset
+  let elapsedText = '';
+  if (spinnerWrap) {
+    const el = spinnerWrap.querySelector(`#elapsed-${node}`);
+    if (el) elapsedText = el.textContent;
+  }
+
+  const doneHtml = `
+    <div class="activity-pill fade-in">
+      <span style="color:#3fb950;font-size:11px">✓</span>
+      <span class="pill-label">${meta.label}</span>
+      ${summary ? `<span class="pill-meta">· ${escHtml(summary)}</span>` : ''}
+      ${elapsedText ? `<span class="pill-meta">${elapsedText}</span>` : ''}
+    </div>`;
+
+  if (spinnerWrap) {
+    spinnerWrap.innerHTML = doneHtml;
+    spinnerWrap.id = `node-${node}`;
+  } else {
+    // No spinner shown for this node — only show done pill for key nodes
+    const keyNodes = ['planner_llm', 'executor_pipeline', 'change_classifier', 'partial_executor', 'qc_diagnose'];
+    if (!keyNodes.includes(node)) return;
+    showAgentLog();
+    const wrap = document.createElement('div');
+    wrap.id = `node-${node}`;
+    wrap.className = 'fade-in';
+    wrap.innerHTML = doneHtml;
+    log.appendChild(wrap);
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
 }
 
 function getKeyFields(node, data) {
@@ -1426,18 +1693,15 @@ function addQcDiagnoseAlert(message, diagnosis) {
 
 function addDoneCard(projectId) {
   const log = document.getElementById('agent-log');
-  const card = document.createElement('div');
-  card.className = 'card p-3 fade-in border-green-800 bg-green-950/20';
-  card.innerHTML = `
-    <div class="flex items-center gap-2">
-      <span class="text-green-400 text-lg">🎉</span>
-      <div>
-        <p class="text-sm font-medium text-green-400">Pipeline complete!</p>
-        <p class="text-xs text-gray-500">Video generated. Check the panel on the right →</p>
-      </div>
+  const wrap = document.createElement('div');
+  wrap.className = 'fade-in';
+  wrap.innerHTML = `
+    <div class="activity-pill" style="border-color:#1a4a2e;background:#0d2119;color:#3fb950">
+      <span style="font-size:13px">✓</span>
+      <span class="pill-label">Video ready — check the panel on the right</span>
     </div>`;
-  log.appendChild(card);
-  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  log.appendChild(wrap);
+  wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   // Load video for this project
   loadProjectVideo(projectId);
 }
@@ -1462,16 +1726,10 @@ async function loadProjectVideo(projectId) {
     const div = document.createElement('div');
     div.className = 'fade-in space-y-2';
     div.innerHTML = `
-      ${isTurbo ? `<div class="text-xs text-yellow-500 text-center px-1">⚡ Turbo preview (480p · ~2s clips)</div>` : `<div class="text-xs text-blue-400 text-center px-1">✦ HD quality (720p · ~5s clips)</div>`}
-      <video id="main-video-player" controls playsinline class="w-full rounded-lg border border-gray-700 bg-black"
+        <video id="main-video-player" controls playsinline class="w-full rounded-lg border border-gray-700 bg-black"
         style="max-height: 480px; aspect-ratio: 9/16; object-fit: contain;">
         <source src="${videoUrl}" type="video/mp4"/>
       </video>
-      ${isTurbo ? `
-      <button onclick="upgradeToHD()"
-        class="btn-approve w-full text-sm py-2 rounded-md font-medium flex items-center justify-center gap-2">
-        ✦ Upgrade to HD
-      </button>` : ''}
       <div class="flex gap-2">
         <a href="${videoUrl}" download="${filename}"
           class="flex-1 flex items-center justify-center gap-1.5 btn-secondary text-xs py-1.5 rounded-md">
@@ -1560,9 +1818,15 @@ async function initDb() {
 
 // ── Keyboard shortcuts ─────────────────────────────────────────────────────
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && e.target.id === 'chat-input' && (e.metaKey || e.ctrlKey)) {
-    e.preventDefault();
-    handleChatSend();
+  if (e.key === 'Enter' && e.target.id === 'chat-input') {
+    // In done/plan_ready: plain Enter submits (Shift+Enter for newline)
+    // In idle/error: only Cmd/Ctrl+Enter submits (textarea may be multi-line)
+    const submitOnEnter = (appState === 'done' || appState === 'plan_ready') && !e.shiftKey;
+    const submitOnCmdEnter = (e.metaKey || e.ctrlKey);
+    if (submitOnEnter || submitOnCmdEnter) {
+      e.preventDefault();
+      handleChatSend();
+    }
   }
   if (e.key === 'Enter' && (e.target.id === 'api-key-input' || e.target.id === 'fal-key-input')) {
     saveApiKey();
@@ -1628,41 +1892,66 @@ function renderPlan(plan, editable) {
     `<p class="text-sm text-gray-300 py-1 border-b border-gray-800 last:border-0">${i + 1}. ${escHtml(l)}</p>`
   ).join('');
 
+  const conceptImages = plan.concept_images || {};
+
+  // Thumbnail placeholder (shown when no concept image)
+  const thumbPlaceholder = (hint) => {
+    const icons = { macro:'🔬', lifestyle:'🌅', product:'📦', text:'💬', pov:'👁', asmr:'✨', wide:'🏙' };
+    return `<div class="flex items-center justify-center w-full h-full text-2xl opacity-30">${icons[hint] || '🎬'}</div>`;
+  };
+
   const storyboard = (plan.storyboard || []).map((scene, i) => {
     const shot = (plan.shot_list || [])[i] || {};
+    const shotId = shot.shot_id || `S${scene.scene || i+1}`;
+    const conceptImg = conceptImages[shotId];
+
+    // Small 9:16 film-frame thumbnail (72px wide × 128px tall)
+    const thumb = `
+      <div class="flex-shrink-0 rounded overflow-hidden" style="width:72px;height:128px;background:#0d1117;border:1px solid #30363d">
+        ${conceptImg
+          ? `<img src="${conceptImg}" class="w-full h-full object-cover" title="Gemini concept"/>`
+          : thumbPlaceholder(scene.asset_hint)}
+      </div>`;
+
     if (editable) {
       return `
       <div class="card p-3 fade-in" data-scene-idx="${i}">
-        <div class="flex gap-2 mb-2 items-center flex-wrap">
-          <span class="text-xs font-bold text-gray-400">Scene ${scene.scene || i+1}</span>
-          <span class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded font-mono">${assetIcon[scene.asset_hint] || '🎬'} ${scene.asset_hint || '?'}</span>
-          <input type="number" data-field="duration" value="${scene.duration || 3}" min="1" max="30" step="0.5"
-            class="w-14 text-xs p-1 rounded" style="background:#0d1117;border:1px solid #30363d"/>
-          <span class="text-xs text-gray-500">s</span>
+        <div class="flex gap-3">
+          ${thumb}
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-1.5 mb-1.5 flex-wrap">
+              <span class="text-xs font-bold text-gray-500">S${scene.scene || i+1}</span>
+              <span class="text-xs bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded font-mono">${assetIcon[scene.asset_hint] || '🎬'} ${scene.asset_hint || '?'}</span>
+              <input type="number" data-field="duration" value="${scene.duration || 3}" min="0.5" max="30" step="0.5"
+                class="w-12 text-xs p-1 rounded ml-auto" style="background:#0d1117;border:1px solid #30363d"/>
+              <span class="text-xs text-gray-500">s</span>
+            </div>
+            <textarea data-field="desc" rows="3"
+              class="w-full text-xs p-2 resize-none rounded mb-1.5"
+              style="background:#0d1117;border:1px solid #30363d;line-height:1.4">${escHtml(scene.desc)}</textarea>
+            <input data-field="overlay" type="text" value="${escHtml(shot.text_overlay || '')}"
+              placeholder="Text overlay…"
+              class="w-full text-xs p-1.5 rounded" style="background:#0d1117;border:1px solid #30363d"/>
+          </div>
         </div>
-        <textarea data-field="desc" rows="3"
-          class="w-full text-sm p-2 resize-none rounded mb-1"
-          style="background:#0d1117;border:1px solid #30363d">${escHtml(scene.desc)}</textarea>
-        <input data-field="overlay" type="text" value="${escHtml(shot.text_overlay || '')}"
-          placeholder="Text overlay (optional)"
-          class="w-full text-xs p-1.5 rounded" style="background:#0d1117;border:1px solid #30363d"/>
       </div>`;
     } else {
       return `
       <div class="card p-3 fade-in">
-        <div class="flex items-start gap-3">
-          <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-sm font-bold text-gray-400">${scene.scene || i+1}</div>
+        <div class="flex gap-3">
+          ${thumb}
           <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-1.5 flex-wrap">
-              <span class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded font-mono">${assetIcon[scene.asset_hint] || '🎬'} ${scene.asset_hint || '?'}</span>
+            <div class="flex items-center gap-1.5 mb-1.5 flex-wrap">
+              <span class="text-xs font-bold text-gray-500">S${scene.scene || i+1}</span>
+              <span class="text-xs bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded font-mono">${assetIcon[scene.asset_hint] || '🎬'} ${scene.asset_hint || '?'}</span>
               <span class="text-xs text-gray-600">${scene.duration}s</span>
               <button onclick="rerenderShot(${i})" title="Regenerate this shot"
                 class="ml-auto text-xs text-gray-500 hover:text-yellow-400 transition-colors">🔄</button>
             </div>
-            <p class="text-sm text-gray-300 leading-relaxed">${escHtml(scene.desc)}</p>
+            <p class="text-xs text-gray-300 leading-relaxed">${escHtml(scene.desc)}</p>
             ${shot.text_overlay ? `
-              <div class="mt-2 flex items-start gap-1.5">
-                <span class="text-xs text-gray-600 flex-shrink-0 mt-0.5">overlay:</span>
+              <div class="mt-1.5 flex items-center gap-1">
+                <span class="text-xs text-gray-600">overlay:</span>
                 <span class="text-xs text-yellow-400 font-mono">"${escHtml(shot.text_overlay)}"</span>
               </div>` : ''}
           </div>
@@ -1737,6 +2026,14 @@ async function rerenderShot(shotIndex) {
 async function openSettings() {
   try {
     const s = await api('GET', '/api/settings');
+    const googleCur = document.getElementById('google-key-current');
+    if (s.google_api_key_set) {
+      googleCur.textContent = `Current: ${s.google_api_key_preview}`;
+      googleCur.className = 'text-xs text-green-600 mt-1.5';
+    } else {
+      googleCur.textContent = 'Not set — Gemini features disabled';
+      googleCur.className = 'text-xs text-yellow-600 mt-1.5';
+    }
     const cur = document.getElementById('api-key-current');
     if (s.anthropic_api_key_set) {
       cur.textContent = `Current: ${s.anthropic_api_key_preview}`;
@@ -1763,14 +2060,20 @@ async function openSettings() {
     }
   } catch (e) {}
   document.getElementById('settings-modal').classList.remove('hidden');
-  document.getElementById('api-key-input').focus();
+  document.getElementById('google-key-input').focus();
 }
 
 function closeSettings() {
   document.getElementById('settings-modal').classList.add('hidden');
+  document.getElementById('google-key-input').value = '';
   document.getElementById('api-key-input').value = '';
   document.getElementById('fal-key-input').value = '';
   document.getElementById('replicate-token-input').value = '';
+}
+
+function toggleGoogleKeyVisibility() {
+  const input = document.getElementById('google-key-input');
+  input.type = input.type === 'password' ? 'text' : 'password';
 }
 
 function toggleKeyVisibility() {
@@ -1789,13 +2092,18 @@ function toggleReplicateVisibility() {
 }
 
 async function saveApiKey() {
+  const googleKey = document.getElementById('google-key-input').value.trim();
   const antKey = document.getElementById('api-key-input').value.trim();
   const falKey = document.getElementById('fal-key-input').value.trim();
   const repToken = document.getElementById('replicate-token-input').value.trim();
-  if (!antKey && !falKey && !repToken) { toast('Please enter at least one API key', 'error'); return; }
+  if (!googleKey && !antKey && !falKey && !repToken) { toast('Please enter at least one API key', 'error'); return; }
   try {
-    const res = await api('POST', '/api/settings', { anthropic_api_key: antKey, fal_key: falKey, replicate_api_token: repToken });
+    const res = await api('POST', '/api/settings', {
+      google_api_key: googleKey, anthropic_api_key: antKey,
+      fal_key: falKey, replicate_api_token: repToken
+    });
     const parts = [];
+    if (res.google_preview) parts.push(`Gemini: ${res.google_preview}`);
     if (res.anthropic_preview) parts.push(`Anthropic: ${res.anthropic_preview}`);
     if (res.fal_preview) parts.push(`fal.ai: ${res.fal_preview}`);
     if (res.replicate_preview) parts.push(`Replicate: ${res.replicate_preview}`);
@@ -2013,7 +2321,16 @@ async function uploadLogoFile(input) {
 
 // ── Init ───────────────────────────────────────────────────────────────────
 setAppState('idle');
-loadProjects();
+loadProjects().then(() => {
+  // Auto-select the most recent planned/running project on page load
+  // so users returning from a payment page don't lose their storyboard.
+  if (!currentProjectId) {
+    api('GET', '/api/projects').then(projects => {
+      const resume = projects.find(p => p.status === 'planned' || p.status === 'running' || p.status === 'failed');
+      if (resume) selectProject(resume.project_id);
+    }).catch(() => {});
+  }
+});
 loadBrandKits();
 updateApiStatus();
 document.getElementById('chat-input').focus();
@@ -2279,7 +2596,7 @@ async function submitGuestCode() {
       body: JSON.stringify({code}),
     });
     if (res.ok) {
-      document.getElementById('guest-gate').classList.add('hidden');
+      window.location.reload();
     } else {
       toast('Invalid access code', 'error');
     }
@@ -2386,6 +2703,20 @@ if (urlParams.get('payment') === 'success') {
 
 loadAuthState();
 loadChangelog();
+
+// Auto-fill URL from landing page referral (?url=...)
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const preUrl = params.get('url');
+  if (preUrl) {
+    const el = document.getElementById('url-input');
+    if (el) {
+      el.value = preUrl;
+      el.dispatchEvent(new Event('input'));
+    }
+    history.replaceState({}, '', '/app');
+  }
+})();
 setInterval(loadChangelog, 60 * 60 * 1000); // refresh changelog every hour
 </script>
 </body>

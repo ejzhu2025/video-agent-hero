@@ -30,7 +30,8 @@ def executor_pipeline(state: dict[str, Any]) -> dict[str, Any]:
     replicate_token = os.getenv("REPLICATE_API_TOKEN")
     fal_key = os.getenv("FAL_KEY") or os.getenv("FAL_API_KEY")
     import sys
-    _provider = "replicate" if replicate_token else ("fal" if fal_key else "pil")
+    # fal.ai takes priority when both keys are set — better concurrency, no burst limits
+    _provider = "fal" if fal_key else ("replicate" if replicate_token else "pil")
     print(f"[executor] provider={_provider}", file=sys.stderr, flush=True)
 
     with Progress(
@@ -40,18 +41,18 @@ def executor_pipeline(state: dict[str, Any]) -> dict[str, Any]:
     ) as progress:
         task = progress.add_task("[cyan]Rendering shots…", total=len(shot_list))
 
-        if replicate_token or fal_key:
-            # ── AI T2V path (Replicate preferred, fal.ai fallback) ───────────
-            if replicate_token:
+        if fal_key or replicate_token:
+            # ── AI T2V path (fal.ai preferred, Replicate fallback) ───────────
+            if fal_key:
+                os.environ.setdefault("FAL_KEY", fal_key)
+                from render.fal_t2v import generate_clip
+                _using_replicate = False
+            else:
                 from render.replicate_t2v import generate_clip
                 from render.replicate_i2v import (
                     generate_clip_from_image, build_shot_motion_prompt, build_outro_motion_prompt,
                 )
                 _using_replicate = True
-            else:
-                os.environ.setdefault("FAL_KEY", fal_key)
-                from render.fal_t2v import generate_clip
-                _using_replicate = False
 
             storyboard = plan.get("storyboard", [])
             style_tone = state.get("clarification_answers", {}).get("style_tone", ["fresh"])
@@ -66,17 +67,16 @@ def executor_pipeline(state: dict[str, Any]) -> dict[str, Any]:
                 is_outro = (i == len(shot_list) - 1)
                 product_image_path = state.get("product_image_path", "")
                 logo_path = brand_kit.get("logo", {}).get("path", "")
-                # CTA text: prefer shot text_overlay, fall back to plan script CTA
-                cta_text = (
-                    shot.get("text_overlay", "")
-                    or plan.get("script", {}).get("cta", "")
-                )
+                cta_text = plan.get("script", {}).get("cta", "")
 
-                # ── Priority 1: Outro + product image → FLUX Kontext ad poster + I2V ──
-                # Applies regardless of shot type — ensures the last frame always
-                # features the real product when the user has uploaded a photo.
+                # ── Priority 1: Outro + product image → Gemini ad poster + I2V ──
+                # Gemini generates a polished vertical ad poster from the product photo,
+                # then I2V animates it.  Fallback chain:
+                #   Gemini T2I → I2V  →  (fail)  direct product image → I2V  →  (fail)  T2V
+                # The outro must NEVER fall through to concept image.
                 if is_outro and product_image_path and Path(product_image_path).exists():
-                    from render.fal_t2i import generate_ad_frame, build_ad_prompt
+                    from render.gemini_t2i import generate_ad_frame, build_ad_prompt
+                    from agent.nodes.planner_llm import get_gemini_client
                     _i2v_gen = (
                         __import__("render.replicate_i2v", fromlist=["generate_clip_from_image", "build_outro_motion_prompt"])
                         if _using_replicate else
@@ -84,31 +84,38 @@ def executor_pipeline(state: dict[str, Any]) -> dict[str, Any]:
                     )
                     generate_clip_from_image = _i2v_gen.generate_clip_from_image
                     build_outro_motion_prompt = _i2v_gen.build_outro_motion_prompt
+                    motion_prompt = build_outro_motion_prompt(brand_kit, brief=state.get("brief", ""))
+
+                    # Step A: Gemini T2I → I2V
+                    _outro_img_path = product_image_path  # default to raw product image
                     try:
+                        gemini_client = get_gemini_client()
+                        if not gemini_client:
+                            raise RuntimeError("No Gemini client available")
                         ad_img_path = str(work_dir / f"{shot_id}_ad.png")
                         ad_prompt = build_ad_prompt(
                             brand_kit,
                             brief=state.get("brief", ""),
                             cta_text=cta_text,
                         )
-                        generate_ad_frame(product_image_path, ad_prompt, ad_img_path)
-                        motion_prompt = build_outro_motion_prompt(brand_kit, brief=state.get("brief", ""))
+                        generate_ad_frame(product_image_path, ad_prompt, ad_img_path, gemini_client)
+                        _outro_img_path = ad_img_path  # use Gemini-generated poster
+                        import sys; print(f"[executor] {shot_id}: Gemini ad poster ✓", file=sys.stderr)
+                    except Exception as e:
+                        import sys
+                        print(f"[executor] {shot_id}: Gemini ad poster failed ({e}) — using raw product image for I2V", file=sys.stderr)
+
+                    # Step B: I2V with whichever image we have (Gemini poster or raw product)
+                    try:
                         raw_i2v_path = str(work_dir / f"{shot_id}_i2v_raw.mp4")
-                        generate_clip_from_image(ad_img_path, motion_prompt, raw_i2v_path, quality=quality)
+                        generate_clip_from_image(_outro_img_path, motion_prompt, raw_i2v_path, quality=quality)
                         fc.trim_and_scale_clip(raw_i2v_path, clip_path, duration=duration)
+                        import sys; print(f"[executor] {shot_id}: outro I2V ✓ (src={Path(_outro_img_path).name})", file=sys.stderr)
                         return {"shot_id": shot_id, "clip_path": clip_path, "duration": duration}
                     except Exception as e:
                         import sys
-                        print(f"[executor] FLUX Kontext + I2V outro failed: {e} — falling back to PIL", file=sys.stderr)
-                        fg = FrameGenerator(brand_kit=brand_kit, work_dir=work_dir)
-                        frame_path = fg.generate_frame(
-                            shot_id=shot_id, shot_type="text",
-                            text_overlay=cta_text, scene_index=i,
-                            is_outro=True, logo_path=logo_path,
-                        )
-                        fc.image_to_clip(str(frame_path), clip_path, duration=duration,
-                                         width=1080, height=1920, ken_burns=False)
-                        return {"shot_id": shot_id, "clip_path": clip_path, "duration": duration}
+                        print(f"[executor] {shot_id}: outro I2V also failed ({e}) — falling through to T2V", file=sys.stderr)
+                        # Only now fall through to T2V — concept image is skipped for outro
 
                 # ── Priority 2: All remaining shots → T2V (includes type="text") ──
                 # When no product image is available we skip static PIL cards entirely
@@ -141,13 +148,83 @@ def executor_pipeline(state: dict[str, Any]) -> dict[str, Any]:
                         import sys
                         print(f"[executor] I2V shot failed: {e} — falling back to T2V", file=sys.stderr)
 
-                # Default: T2V for non-product shots or when no product image is available
-                # Use pre-compiled prompt from PromptCompiler if available
+                # ── Priority 3: show_product + product image → Gemini T2I (reference) → I2V ──
+                # When the storyboard says show_product=true AND a product image is available,
+                # use Gemini to generate a scene frame with the exact product, then I2V animate it.
+                # This ensures product appearance is consistent with the user's reference photo.
+                show_product = scene.get("show_product", False)
+                if show_product and product_image_path and Path(product_image_path).exists():
+                    try:
+                        from render.gemini_t2i import generate_scene_frame
+                        from agent.nodes.planner_llm import get_gemini_client
+                        _gclient = get_gemini_client()
+                        if not _gclient:
+                            raise RuntimeError("No Gemini client")
+                        style_tone = state.get("clarification_answers", {}).get("style_tone", ["cinematic"])
+                        scene_img_path = str(work_dir / f"{shot_id}_scene.png")
+                        generate_scene_frame(
+                            product_image_path, desc, scene_img_path, _gclient,
+                            style_tone=style_tone if isinstance(style_tone, list) else [style_tone],
+                        )
+                        _i2v_mod = (
+                            __import__("render.replicate_i2v", fromlist=["generate_clip_from_image", "build_shot_motion_prompt"])
+                            if _using_replicate else
+                            __import__("render.fal_i2v", fromlist=["generate_clip_from_image", "build_shot_motion_prompt"])
+                        )
+                        motion_prompt = _i2v_mod.build_shot_motion_prompt(shot_type, desc, brief=state.get("brief", ""))
+                        raw_path = str(work_dir / f"{shot_id}_raw.mp4")
+                        _i2v_mod.generate_clip_from_image(scene_img_path, motion_prompt, raw_path, quality=quality)
+                        fc.trim_and_scale_clip(raw_path, clip_path, duration=duration)
+                        import sys; print(f"[executor] {shot_id}: product-ref T2I→I2V ✓", file=sys.stderr)
+                        return {"shot_id": shot_id, "clip_path": clip_path, "duration": duration}
+                    except Exception as e:
+                        import sys
+                        print(f"[executor] {shot_id}: product-ref T2I→I2V failed ({e}) — falling back", file=sys.stderr)
+
+                # ── Priority 4: Gemini concept image → I2V ───────────────────
+                # If Gemini generated a concept image for this shot, use it as
+                # the reference frame for I2V — videos will match the visual intent.
+                concept_images = plan.get("concept_images", {})
+                concept_img_data_url = concept_images.get(shot_id, "")
+                if concept_img_data_url:
+                    try:
+                        import base64
+                        # Decode data URL → PNG file
+                        header, b64 = concept_img_data_url.split(",", 1)
+                        img_bytes = base64.b64decode(b64)
+                        concept_img_path = str(work_dir / f"{shot_id}_concept.png")
+                        with open(concept_img_path, "wb") as f:
+                            f.write(img_bytes)
+                        # Build motion prompt from compiled T2V prompt
+                        t2v_prompts = state.get("t2v_prompts", {})
+                        compiled = t2v_prompts.get(shot_id, "")
+                        motion_prompt = (
+                            compiled.get("positive", desc) if isinstance(compiled, dict)
+                            else (compiled if isinstance(compiled, str) and compiled else desc)
+                        )
+                        motion_prompt = (
+                            f"{motion_prompt}. Animate this scene with cinematic motion. "
+                            "Vertical 9:16, smooth camera movement, no text, no logos."
+                        )
+                        _i2v_mod = (
+                            __import__("render.replicate_i2v", fromlist=["generate_clip_from_image"])
+                            if _using_replicate else
+                            __import__("render.fal_i2v", fromlist=["generate_clip_from_image"])
+                        )
+                        raw_path = str(work_dir / f"{shot_id}_raw.mp4")
+                        _i2v_mod.generate_clip_from_image(concept_img_path, motion_prompt, raw_path, quality=quality)
+                        fc.trim_and_scale_clip(raw_path, clip_path, duration=duration)
+                        import sys; print(f"[executor] {shot_id}: Gemini I2V ✓", file=sys.stderr)
+                        return {"shot_id": shot_id, "clip_path": clip_path, "duration": duration}
+                    except Exception as e:
+                        import sys
+                        print(f"[executor] {shot_id}: Gemini I2V failed ({e}) — falling back to T2V", file=sys.stderr)
+
+                # Default: T2V — use pre-compiled prompt from PromptCompiler
                 t2v_prompts = state.get("t2v_prompts", {})
                 compiled = t2v_prompts.get(shot_id, "")
                 negative_prompt = ""
                 if isinstance(compiled, dict):
-                    # New format: {positive, negative}
                     prompt = compiled.get("positive", "")
                     negative_prompt = compiled.get("negative", "")
                 elif isinstance(compiled, str) and compiled:
@@ -167,12 +244,20 @@ def executor_pipeline(state: dict[str, Any]) -> dict[str, Any]:
                 return {"shot_id": shot_id, "clip_path": clip_path, "duration": duration}
 
             results: dict[int, dict] = {}
-            with ThreadPoolExecutor(max_workers=min(6, len(shot_list))) as pool:
+            total_shots = len(shot_list)
+            done_shots = 0
+            # Replicate: try up to 3 concurrent; will retry on 429 automatically.
+            # fal.ai supports higher concurrency.
+            _max_workers = min(3, len(shot_list)) if _using_replicate else min(4, len(shot_list))
+            with ThreadPoolExecutor(max_workers=_max_workers) as pool:
                 futures = {pool.submit(_process_shot, (i, s)): i for i, s in enumerate(shot_list)}
                 for fut in as_completed(futures):
                     idx = futures[fut]
                     results[idx] = fut.result()
+                    done_shots += 1
                     progress.advance(task)
+                    import agent.deps as _deps
+                    _deps.emit({"type": "shot_progress", "done": done_shots, "total": total_shots})
             scene_clips = [results[i] for i in range(len(shot_list))]
 
         else:
@@ -197,7 +282,7 @@ def executor_pipeline(state: dict[str, Any]) -> dict[str, Any]:
                 frame_path = fg.generate_frame(
                     shot_id=shot_id,
                     shot_type=shot_type,
-                    text_overlay=shot.get("text_overlay", ""),
+                    text_overlay="",
                     scene_index=i,
                     is_intro=(i == 0),
                     is_outro=is_outro,
@@ -219,6 +304,8 @@ def executor_pipeline(state: dict[str, Any]) -> dict[str, Any]:
                     {"shot_id": shot_id, "clip_path": str(clip_path), "duration": duration}
                 )
                 progress.advance(task)
+                import agent.deps as _deps
+                _deps.emit({"type": "shot_progress", "done": len(scene_clips), "total": len(shot_list)})
 
     messages = state.get("messages", [])
     messages.append(

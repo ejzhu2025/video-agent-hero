@@ -76,6 +76,7 @@ router = APIRouter()
 class CreateProjectRequest(BaseModel):
     brief: str
     brand_id: str = "tong_sui"
+    title: str = ""
 
 
 class RunRequest(BaseModel):
@@ -93,6 +94,8 @@ class PlanRequest(BaseModel):
     brand_id: str = "tong_sui"
     clarification_answers: dict = {}
     plan_feedback: str = ""  # non-empty → replan from existing plan
+    product_info: dict = {}  # scraped selling points: key_features, emotional_hook, target_audience, etc.
+    product_category: str = ""  # e.g. "luxury jewelry", "skincare", "food & beverage"
 
 
 class ExecuteRequest(BaseModel):
@@ -224,6 +227,8 @@ async def _run_agent_with_state(
         _run_events.setdefault(project_id, []).append(event)
         loop.call_soon_threadsafe(queue.put_nowait, event)
 
+    deps.set_emit(_emit)  # allow executor threads to emit progress events
+
     def run_in_thread():
         graph = graph_fn()
         stdout_buf = io.StringIO()
@@ -299,6 +304,8 @@ async def create_project(req: CreateProjectRequest, request: Request, auth_user=
     pid = deps.db().create_project(
         brief=req.brief, brand_id=req.brand_id, user_id=user_id,
     )
+    if req.title:
+        deps.db().set_project_title(pid, req.title[:80])
     return {"project_id": pid}
 
 
@@ -347,6 +354,32 @@ async def upload_project_product_image(
     proj_dir.mkdir(parents=True, exist_ok=True)
     product_path = proj_dir / "product.png"
     product_path.write_bytes(content)
+    return {"status": "ok", "path": str(product_path)}
+
+
+class ProductImagePathRequest(BaseModel):
+    image_path: str
+
+@router.post("/api/projects/{project_id}/product-image-path")
+async def set_project_product_image_path(
+    project_id: str, req: ProductImagePathRequest,
+    request: Request = None, auth_user=Depends(optional_user),
+):
+    """Link an already-downloaded image (from URL scrape) as the project's product image."""
+    import shutil
+    user_id = _resolve_user_id(auth_user, request)
+    proj = deps.db().get_project(project_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+    _check_project_ownership(proj, user_id)
+    src = Path(req.image_path)
+    if not src.exists():
+        raise HTTPException(status_code=400, detail="Image file not found")
+    data_dir = Path(os.environ.get("VAH_DATA_DIR", "./data"))
+    proj_dir = data_dir / "projects" / project_id
+    proj_dir.mkdir(parents=True, exist_ok=True)
+    product_path = proj_dir / "product.png"
+    shutil.copy(src, product_path)
     return {"status": "ok", "path": str(product_path)}
 
 
@@ -426,6 +459,10 @@ async def plan_project(
         "user_prefs": {},
         "similar_projects": [],
     }
+    if req.product_info:
+        initial_state["product_info"] = req.product_info
+    if req.product_category:
+        initial_state["product_category"] = req.product_category
     if existing_plan:
         initial_state["plan"] = existing_plan
 

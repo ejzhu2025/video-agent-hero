@@ -219,7 +219,8 @@ def build_execute_only_graph() -> Any:
 # ── Partial re-render graph (used by /modify endpoint) ───────────────────────
 
 def _route_change_classifier(state: dict[str, Any]) -> str:
-    if state.get("change_type") == "local":
+    ct = state.get("change_type", "global")
+    if ct in ("local", "add_scene", "remove_scene"):
         return "partial_executor"
     return "planner_llm"
 

@@ -27,69 +27,160 @@ LLMCall = Callable[[str, str], str]  # (system_prompt, user_prompt) -> raw text
 # ══════════════════════════════════════════════════════════════════════════════
 
 DIRECTOR_SYSTEM = """\
-You are a creative director for viral short-form social media videos (TikTok / Reels / Shorts).
-Given a brief and brand context, generate 3 DISTINCT creative concepts, then select the best one.
+You are a world-class creative director specializing in viral short-form video for TikTok / Reels / Shorts.
+Your job is to produce 3 genuinely SURPRISING, non-obvious creative concepts — then select the best.
+
+━━ CREATIVE AMBITION (READ THIS FIRST) ━━
+The biggest failure mode is "expected". Reject your first obvious idea.
+Ask: "Would a casual scroller stop their thumb for this?" If not, push further.
+- Lean into unexpected angles, cultural tension, humor, nostalgia, or taboo-adjacent curiosity
+- The best hook is one that makes someone think "wait, what?" in the first 0.5 seconds
+- A concept is only creative if it couldn't be mistaken for any other brand's ad
 
 Output ONLY valid JSON (no markdown fences):
 {
   "concepts": [
     {
       "id": "C1",
-      "hook_angle": "<hook strategy — see archetypes below>",
-      "visual_style": "<cinematography style, e.g. 'POV handheld + ASMR macro inserts'>",
-      "key_message": "<core message in 1 sentence>",
-      "mood": "<emotional tone, e.g. 'energetic', 'serene', 'playful', 'luxurious'>",
+      "hook_angle": "<hook archetype — see list below>",
+      "creative_twist": "<the ONE surprising/unexpected element that makes this concept stand out>",
+      "visual_style": "<cinematography style, e.g. 'extreme macro ASMR + whip-pan lifestyle reveals'>",
+      "key_message": "<emotional truth being communicated, not a product feature — 1 sentence>",
+      "mood": "<emotional tone, e.g. 'nostalgic warmth', 'quiet luxury', 'chaotic joy', 'serene power'>",
       "scene_count": <int 4-7>,
       "visual_signature": {
-        "camera_style": "<single unified camera movement for ALL shots, e.g. 'handheld drift with micro-shake — warm and authentic'>",
-        "color_palette": "<2-3 hex codes + descriptive names, e.g. '#00B894 deep teal, #FFE082 warm straw, #FFFFFF clean white'>",
-        "lighting": "<unified lighting setup for all shots, e.g. 'golden-hour backlight with warm lens flare'>",
-        "visual_motif": "<repeating visual element threading all shots, e.g. 'condensation droplets on cup surface'>"
+        "camera_style": "<single unified camera movement for ALL shots>",
+        "color_palette": "<2-3 hex codes + evocative names>",
+        "lighting": "<unified lighting for all shots>",
+        "visual_motif": "<one repeating visual element that threads all shots together>"
       }
     },
     { ... concept 2 ... },
     { ... concept 3 ... }
   ],
-  "best_index": <0-based index of the concept that best fits this brief and brand>
+  "best_index": <0-based index of the concept with highest viral + brand fit>
 }
 
-━━ MODERN HOOK ARCHETYPES — choose one per concept, all 3 must differ ━━
-- "pov-immersion"     : viewer IS the protagonist — hand reaches into frame, eyes pan toward product,
-                        first-person perspective makes viewer feel they are experiencing the moment
-- "problem-contrast"  : open on a relatable pain point (sweating in heat, exhausted, stressed),
-                        then cut to product as instant relief — contrast drives emotional payoff
-- "asmr-reveal"       : extreme sensory close-ups FIRST (ice cube dropping, liquid slow-pour, condensation
-                        forming on glass, steam rising) — product identity withheld until midpoint
-- "micro-story"       : complete 5-8 second narrative arc — stranger encounters product → curiosity →
-                        first sip → visible transformation (smile, relief, energy)
-- "social-proof"      : feels unscripted and authentic — friend films friend candid reaction,
-                        casual handheld, imperfect framing, genuine emotion
+━━ HOOK ARCHETYPES — each concept must use a DIFFERENT archetype ━━
+- "pov-immersion"      : viewer IS the protagonist — first-person perspective, hands in frame,
+                         viewer feels they are living the moment, not watching it
+- "problem-contrast"   : open cold on a relatable pain (heat, exhaustion, boredom, craving),
+                         product appears as the exact relief — emotional contrast drives payoff
+- "asmr-reveal"        : sensory-first — ice dropping, liquid pouring, condensation forming —
+                         product identity withheld until the reveal halfway through
+- "micro-story"        : compressed emotional arc in 8s — stranger/protagonist notices → tries → transforms
+                         viewer feels the before/after without being told it
+- "curiosity-gap"      : open on something STRANGE or UNEXPECTED that has no obvious connection to the product
+                         (a mystery, an odd close-up, an out-of-context action) — answer revealed at climax
+- "cultural-moment"    : tap into a very specific cultural ritual, meme, or generational reference
+                         that the target audience LIVES — product becomes part of their identity
+- "sensory-synesthesia": make the viewer almost TASTE or FEEL the product through extreme close-ups,
+                         implied sounds (ice crack, fizz, crunch), texture, temperature cues
+- "anti-ad"            : deliberately breaks ad conventions — awkward pauses, overly candid,
+                         mockumentary style, self-aware humor — feels real because it's NOT polished
 
 ━━ HOOK RULES (MANDATORY) ━━
-- First 1.5 seconds MUST create intrigue, tension, or sensory pull — NEVER open with a product shot
-- NEVER start with: product close-up, logo, brand name, generic outdoor establishing shot
-- START with: a relatable human emotion, a striking sensory detail, a surprising contrast, a question implied by action
-- Ending scene should be loop-friendly: final motion echoes or leads back into the first frame's energy
+- First 0.5–1s: NEVER show the product, logo, or brand name — create tension or intrigue FIRST
+- NEVER open with: generic establishing shot, product hero shot, brand card, nature scene
+- END loop-friendly: last frame's energy should want to loop back to frame 1
 
-━━ VISUAL STYLE OPTIONS (pick cinematography that matches the hook) ━━
-Allowed: macro, ASMR-close-up, POV handheld, lifestyle candid, overhead flat-lay, slow-motion,
-push-in dolly, crane float, locked-off symmetry — anything a real camera captures in one take.
-
-━━ T2V GENERABILITY — FORBIDDEN ━━
-NEVER use: split-screen, color gel, halftone, collision dissolve, wipe transitions, digital zoom,
-After Effects, motion graphics, animated text, kinetic typography, compositing two video layers.
+━━ FORBIDDEN (T2V cannot render these) ━━
+split-screen, color gel, halftone, collision dissolve, wipe transitions, digital zoom,
+After Effects, motion graphics, animated text, kinetic typography, VFX compositing
 
 ━━ CONCEPT DIFFERENTIATION ━━
-- Each concept must differ in: hook_angle, visual_style, mood, AND cinematography approach
-- best_index: choose the concept with highest viral potential for the platform + brand fit
+All 3 concepts MUST differ in: hook_angle, creative_twist, visual_style, mood, AND cinematography
 """
 
-DIRECTOR_USER_TEMPLATE = """\
-Brief: {brief}
-Brand: {brand_name}, primary color: {primary_color}, CTA: "{outro_cta}"
-Platform: {platform}, Duration: {duration_sec}s, Language: {language}
+_CATEGORY_STYLE_RULES = {
+    "luxury": (
+        "Extreme slow motion. Dramatic chiaroscuro lighting — one strong directional source, deep shadows. "
+        "Silence or near-silence — let texture speak. Camera barely moves. 'Quiet luxury' — never loud, never obvious. "
+        "Material texture is the hero: gold grain, stone veining, fabric weave. Reveal the product late."
+    ),
+    "jewelry": (
+        "Extreme macro on facets, metal grain, stone color. Light refraction and sparkle as transition motifs. "
+        "Skin contact shots — wrist, neck, fingers — to show scale and desire. Dark or neutral backgrounds to isolate brilliance. "
+        "Never rush. Every frame is a still-life."
+    ),
+    "watches": (
+        "Mechanical detail macro — gears, hands sweeping, crown texture. Wrist lifestyle shots in aspirational settings. "
+        "Side-profile product reveal with raking light. Convey precision through unhurried camera movement."
+    ),
+    "beauty": (
+        "Skin-close tactile shots — cream spreading, serum absorbing, texture melting. "
+        "Transformation arc: dull → luminous, tired → radiant. Warm, soft, flattering light. "
+        "Product texture extreme close-up. Fingertip application ASMR moments."
+    ),
+    "skincare": (
+        "Skin-close tactile shots — cream spreading, serum absorbing, texture melting. "
+        "Transformation arc: dull → luminous, tired → radiant. Warm, soft, flattering light. "
+        "Product texture extreme close-up. Fingertip application ASMR moments."
+    ),
+    "food": (
+        "Appetite-triggering sensory ASMR: pour, drip, slice, bite, steam rising, condensation forming. "
+        "Use heat/cold visual contrast. Golden-hour lifestyle scenes with real people eating/drinking. "
+        "Extreme macro on texture and color. Saturation and warmth — food must look delicious, not clinical."
+    ),
+    "beverage": (
+        "Condensation, pour, ice, fizz, vapor — lead with the sensation. "
+        "Temperature is the emotional core: hot comfort or ice-cold relief. "
+        "Golden-hour lifestyle drinking moments. Sound design implication: ice clink, fizz, gulp."
+    ),
+    "sports": (
+        "High-energy rapid cuts — effort, sweat, the moment of breakthrough. "
+        "Dynamic tracking shots following body movement. "
+        "Contrast: struggle → triumph. Real environments (field, gym, trail), not studios. "
+        "Authenticity over polish — imperfection signals credibility."
+    ),
+    "tech": (
+        "Problem → solution narrative arc. Before: friction, frustration. After: effortless, clean. "
+        "Product reveal in context of use — not floating in studio. "
+        "Tight shots on interfaces, details, reactions. Clean minimal environments."
+    ),
+    "fashion": (
+        "Fabric in motion — movement reveals texture and drape. "
+        "Identity and aspiration over product features. "
+        "Model emotion and body language carry the narrative. "
+        "Location and lighting define the lifestyle world the product belongs to."
+    ),
+    "home": (
+        "Lifestyle context first — show the room, the moment, then the product. "
+        "Warmth, tactility, ritual. Morning routines, evening wind-downs. "
+        "Product as part of a desirable life, never isolated."
+    ),
+}
 
-Generate 3 creative concepts and select the best one. Infer the appropriate tone and mood from the brief.
+_CATEGORY_ALIASES = {
+    "luxury jewelry": "jewelry", "luxury watch": "watches", "fine jewelry": "jewelry",
+    "food & beverage": "food", "food and beverage": "food",
+    "beauty & skincare": "skincare", "beauty and skincare": "skincare",
+    "sports & lifestyle": "sports", "sports & outdoors": "sports",
+    "home & living": "home", "home living": "home",
+}
+
+
+def _get_category_style(product_category: str) -> str:
+    cat = product_category.lower().strip()
+    cat = _CATEGORY_ALIASES.get(cat, cat)
+    for key, style in _CATEGORY_STYLE_RULES.items():
+        if key in cat or cat in key:
+            return style
+    return ""
+
+
+DIRECTOR_USER_TEMPLATE = """\
+{product_context}Brief: {brief}
+Brand: {brand_name} | Primary color: {primary_color} | CTA: "{outro_cta}"
+Platform: {platform} | Duration: {duration_sec}s | Language: {language}
+Target audience: infer from the brief — be specific (age, lifestyle, what they care about)
+Competitive context: assume this product competes in a saturated category — the concept must feel DIFFERENT
+
+{category_style_block}Your task:
+1. Identify what makes this product emotionally resonant (not just what it does, but what it MEANS)
+2. Generate 3 creative concepts using 3 DIFFERENT hook archetypes
+3. For each: fill in creative_twist with the ONE idea that makes it genuinely surprising
+4. Select the best_index based on: scroll-stopping power × emotional resonance × brand fit
 """
 
 
@@ -98,7 +189,34 @@ def run_director(state: dict[str, Any], llm_call: LLMCall) -> dict[str, Any]:
     brand_kit = state.get("brand_kit", {})
     answers = state.get("clarification_answers", {})
 
+    # Product context block — populated from URL scraping (key features + emotional hook)
+    # User's manual text description takes priority (no product_context injected in that case)
+    product_info = state.get("product_info", {})
+    product_context = ""
+    if product_info:
+        lines = []
+        if product_info.get("product_name"):
+            lines.append(f"Product name: {product_info['product_name']}")
+        if product_info.get("key_features"):
+            lines.append(f"Key selling points: {' · '.join(product_info['key_features'])}")
+        if product_info.get("target_audience"):
+            lines.append(f"Target audience: {product_info['target_audience']}")
+        if product_info.get("emotional_hook"):
+            lines.append(f"Core emotional hook: {product_info['emotional_hook']}")
+        if lines:
+            product_context = "\n".join(lines) + "\n\n"
+
+    # Category-specific visual style guidance
+    product_category = state.get("product_category", "") or product_info.get("product_category", "")
+    category_style = _get_category_style(product_category)
+    category_style_block = (
+        f"━━ VISUAL STYLE RULES FOR THIS CATEGORY: {product_category.upper()} ━━\n"
+        f"{category_style}\n\n"
+        if category_style else ""
+    )
+
     user_msg = DIRECTOR_USER_TEMPLATE.format(
+        product_context=product_context,
         brief=state.get("brief", ""),
         brand_name=brand_kit.get("name", brand_kit.get("brand_id", "Brand")),
         primary_color=brand_kit.get("colors", {}).get("primary", "#00B894"),
@@ -106,6 +224,7 @@ def run_director(state: dict[str, Any], llm_call: LLMCall) -> dict[str, Any]:
         platform=answers.get("platform", "tiktok"),
         duration_sec=int(answers.get("duration_sec", 20)),
         language=answers.get("language", "en"),
+        category_style_block=category_style_block,
     )
 
     # Append auto-fix addendum if present (from system_config planner_prompt_addendum)
@@ -181,14 +300,15 @@ Schema (no markdown fences):
       "scene": 1,
       "desc": "<ACTIVE visual description — what is HAPPENING, not what is SHOWING. Use strong action verbs.>",
       "duration": <float>,
-      "asset_hint": "<macro|lifestyle|text|product|pov|asmr>",
+      "asset_hint": "<macro|lifestyle|product|pov|asmr>",
       "narrative_beat": "<hook|tension|contrast|tease|build|reveal|climax|payoff>",
-      "transition_in": "<specific cut technique: 'smash cut from S1 heat haze', 'match on action — hand motion continues', 'whip-pan right into product', 'jump cut — same subject, tighter frame'>"
+      "transition_in": "<specific cut technique: 'smash cut from S1 heat haze', 'match on action — hand motion continues', 'whip-pan right into product', 'jump cut — same subject, tighter frame'>",
+      "show_product": <true|false>
     },
     ...
   ],
   "shot_list": [
-    {"shot_id": "S1", "type": "<macro|wide|close|text|transition|pov|asmr>", "asset": "<asset key or 'generate'>", "text_overlay": "<text>", "duration": <float>},
+    {"shot_id": "S1", "type": "<macro|wide|close|pov|asmr>", "asset": "<asset key or 'generate'>", "duration": <float>},
     ...
   ],
   "render_targets": ["9:16"]
@@ -196,47 +316,70 @@ Schema (no markdown fences):
 
 ━━ SCENE CONSTRUCTION RULES ━━
 - scene_count from concept is a guide; add scenes if needed for narrative flow
-- Each shot duration: 0.5–2.0 seconds (shorter = more energy; use 1.5-2.0 for emotional moments)
+- Each shot duration: 0.5–2.0 seconds (shorter = more energy; use 1.5-2.0 for emotional beats)
 - shot_list must 1-to-1 match storyboard scenes (S1, S2, … SN)
 - duration_sec = sum of all shot durations
 - narrative_beat arc: hook → tension/contrast → tease/build → reveal → climax → payoff
-- Every desc MUST use color_palette colors and camera_style from visual_signature
+- Every desc MUST apply color_palette colors and camera_style from visual_signature
+
+━━ EMOTIONAL ARC (MANDATORY) ━━
+Each scene must serve a specific emotional function — not just show something:
+- Scene 1 (hook):    CREATE a question or desire in the viewer's mind
+- Scene 2 (tension): DEEPEN the problem, curiosity, or anticipation — raise the stakes
+- Scene 3 (build):   BEGIN to deliver — tease the resolution, let tension release slowly
+- Scene 4 (climax):  THE payoff — peak emotion, sensory peak, transformation revealed
+- Scene 5+ (payoff): Let the emotion LAND — slower, quieter, let viewer feel the afterglow
+Script hook/body/cta must carry this arc in words too — not just product claims.
 
 ━━ HOOK RULES (Scene 1 — MANDATORY) ━━
-- Scene 1 MUST NOT show the product. Open with: human emotion, problem, sensory detail, or surprising action
-- Hook must create immediate intrigue — viewer asks "what happens next?" within 1.5s
+- Scene 1 MUST NOT show the product — open with human emotion, problem, or mysterious sensory detail
+- Hook must provoke "wait, what is that?" or "I feel that" within 0.5s
 - Examples by hook_angle:
-  • pov-immersion  → viewer's hand reaches into frame, sweat on skin, blurred heat haze in background
-  • problem-contrast → person fanning themselves, close-up of sweat on neck, tired expression
-  • asmr-reveal    → extreme close-up: ice cube dropped into empty glass, water droplets form in slow-mo
-  • micro-story    → stranger walking past street stall, eyes catch color of the drink, feet stop
-  • social-proof   → phone held sideways filming a friend's candid reaction to first sip
+  • pov-immersion      → viewer's hand drips with sweat, heat shimmer in BG, searching for relief
+  • problem-contrast   → extreme close-up of closed eyes, skin damp, brow furrowed in heat/stress
+  • asmr-reveal        → black screen: sound of ice cracking, then slow reveal of condensation on glass
+  • micro-story        → strangers' feet stop walking; eyes drawn to something off-frame (tease)
+  • curiosity-gap      → an unexpected object, color, or action with no clear context — viewer must watch
+  • cultural-moment    → hyper-specific ritual (late night study, post-gym collapse, monsoon craving)
+  • sensory-synesthesia→ macro texture so extreme it's unidentifiable — viewer must figure out what it is
+  • anti-ad            → deliberately awkward: someone staring at the camera too long, conspicuous silence
 
-━━ NEW SHOT TYPES ━━
-- "pov"  : first-person perspective — camera = viewer's eyes, hands visible, immersive angle
-- "asmr" : extreme sensory macro — ice dropping, liquid pouring, condensation forming, texture reveal.
-           Focus is TACTILE and AUDITORY (describe what would make sound/feel satisfying)
+━━ SHOT TYPES ━━
+- "pov"      : first-person — camera = viewer's eyes, hands visible, fully immersive
+- "asmr"     : extreme sensory macro — tactile, auditory, temperature-focused
+- "macro"    : close-up detail shot — ingredient, texture, surface
+- "lifestyle": candid human moment — real emotion, real environment
+- "product"  : hero product shot — only after emotional investment is established
+- "wide"     : establishing context — sparingly, early or late in arc
 
-━━ CONTRAST & TENSION (for food/beverage/lifestyle) ━━
-- Use narrative_beat "tension" or "contrast" for a before/after moment
-- Pair hot/dry/exhausted with cold/refreshing/energized in adjacent scenes
-- Smash cuts and jump cuts between "problem" and "solution" scenes create viral energy
+━━ show_product FIELD RULES (CRITICAL) ━━
+Set show_product based on whether the actual physical product appears as the visual subject:
+- true  → the scene SHOWS the product itself (held, worn, displayed, or as hero). Use for: product shots, lifestyle shots where person holds/wears the product, outro CTA.
+- false → the product does NOT appear. Use for: hook scenes with ingredients/materials, abstract textures, human emotions without the product, environmental/atmospheric scenes.
+Examples (butterfly hair clip product):
+  Scene: "silkworm cocoons unravel in slow motion, threads catching light" → show_product: false
+  Scene: "butterfly clip rests on a pale wrist, its wings catch morning light" → show_product: true
+  Scene: "model's fingers weave the clip through her hair at golden hour" → show_product: true
+  Scene: "macro: iridescent butterfly wing texture fills the frame" → show_product: false
 
-━━ TRANSITION LANGUAGE (be specific, not generic) ━━
-GOOD: "smash cut — heat shimmer fades into ice-cold condensation", "match on action — hand motion from S2 continues picking up cup", "whip-pan right into product reveal"
-BAD:  "smooth transition", "cut to next scene", "transition from previous"
+━━ TRANSITIONS — BE CINEMATIC (MANDATORY) ━━
+Every scene after S1 must specify transition_in as a SPECIFIC CINEMATIC CUT:
+GOOD transitions:
+- "smash cut — sweat-drenched skin cuts hard to ice-cold condensation on glass"
+- "match on action — hand's reaching motion from S2 continues into lifting the cup"
+- "whip-pan left — blur resolves into overhead flat-lay of ingredients"
+- "jump cut — same subject, frame tightens 50% in a single cut, emphasizing detail"
+- "slow pull-back — camera retreats from macro texture, product identity revealed"
+- "eye-line cut — subject's gaze off-screen pulls viewer to follow, next shot answers"
+BAD transitions: "smooth transition", "cut to", "transition", "fade"
 
 ━━ DESC WRITING RULES (MANDATORY) ━━
-- Use strong ACTION VERBS: "hand reaches", "ice cube drops", "condensation crawls", "lips part", "eyes widen"
-- Describe MOTION first, then framing, then lighting — never a static tableau
-- Include sensory specificity: "tiny bubbles race up the side of the glass", "steam curls off the surface"
+- Lead with MOTION: "condensation crawls down the glass" not "glass with condensation"
+- Include sensory layers: sight + implied sound + implied temperature in every scene
+- Use specific physical details: "three ice cubes, not 'ice cubes in a glass'"
 - NEVER mention: text, captions, logos, watermarks, overlays, taglines, "branded", "branding"
-- NEVER use: "shows", "displays", "features", "presents" — these are static; use dynamic verbs
-- Text content → ONLY in text_overlay fields
-
-━━ OUTRO ━━
-- Type "text" shot is optional — include ONLY if user explicitly requests a brand card
-- If included, desc = abstract visual background only (bokeh, color wash, mood)
+- NEVER use static verbs: "shows", "displays", "features", "presents", "appears"
+- Do NOT include any text overlays, title cards, or brand cards — every shot must be a real visual scene
 
 ━━ FEEDBACK / MODIFICATION RULES ━━
 - Follow modification requests EXACTLY and LITERALLY
@@ -286,9 +429,12 @@ def run_storyboard(
 
     existing_plan = state.get("plan")
     if feedback and existing_plan:
+        # Strip large binary fields (concept_images contain base64 PNGs — millions of tokens)
+        _slim_plan = {k: v for k, v in existing_plan.items()
+                      if k not in ("concept_images", "t2v_prompts", "_quality")}
         existing_plan_block = (
             "Current plan to modify (apply the feedback above to THIS plan):\n"
-            + json.dumps(existing_plan, ensure_ascii=False, indent=2)
+            + json.dumps(_slim_plan, ensure_ascii=False, indent=2)
         )
     else:
         existing_plan_block = ""
@@ -354,7 +500,6 @@ def run_storyboard(
                                 "shot_id": f"S{s['scene']}",
                                 "type": s.get("asset_hint", "lifestyle"),
                                 "asset": "generate",
-                                "text_overlay": "",
                                 "duration": s.get("duration", 1.0),
                             }
                             for s in scenes
@@ -368,19 +513,11 @@ def run_storyboard(
         console.print(f"[green][storyboard][/green] {shot_count} shots generated")
         return plan
     except Exception as e:
-        console.print(f"[yellow][storyboard] Error: {e} — using mock plan[/yellow]")
+        console.print(f"[yellow][storyboard] Error: {e}[/yellow]")
         console.print(f"[dim][storyboard] Raw response (first 400 chars): {raw[:400] if 'raw' in dir() else 'N/A'}[/dim]")
-        from agent.nodes.planner_llm import _mock_plan
-
-        answers_copy = state.get("clarification_answers", {})
-        return _mock_plan(
-            state,
-            project_id,
-            answers_copy.get("platform", "tiktok"),
-            int(answers_copy.get("duration_sec", 20)),
-            answers_copy.get("language", "en"),
-            answers_copy.get("style_tone", ["fresh"]),
-        )
+        # Re-raise so the error surfaces to the user instead of silently returning
+        # unrelated hardcoded content (Coconut Watermelon mock plan).
+        raise RuntimeError(f"Storyboard generation failed: {e}") from e
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -772,6 +909,8 @@ def _translate_palette(palette_str: str) -> str:
     Output: "deep forest green, ivory cream"
     """
     import re
+    if isinstance(palette_str, list):
+        palette_str = ", ".join(str(x) for x in palette_str)
     parts = [p.strip() for p in palette_str.split(",")]
     named: list[str] = []
     for part in parts:
@@ -843,7 +982,6 @@ def _build_cross_shot_sequence(plan: dict[str, Any]) -> list[dict[str, Any]]:
             "desc": scene.get("desc", ""),
             "narrative_beat": scene.get("narrative_beat", ""),
             "transition_in": scene.get("transition_in", ""),
-            "text_overlay": shot.get("text_overlay", ""),
             "duration": duration,
             "motion_speed": _duration_to_motion_speed(duration),  # #2
         }
@@ -899,6 +1037,97 @@ def run_compiler(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Gemini Interleaved Image Generation
+# ══════════════════════════════════════════════════════════════════════════════
+
+CONCEPT_IMAGE_PROMPT = """\
+Vertical 9:16 cinematic concept image for a TikTok/Reels ad scene.
+Photorealistic, professional photography quality. Match the described lighting and mood exactly.
+
+Scene: {scene_desc}
+"""
+
+def _generate_one_concept_image(scene_desc: str, gemini_client: Any) -> str | None:
+    """Generate a single concept image. Returns data URL or None."""
+    import base64
+    from google.genai import types
+
+    prompt = CONCEPT_IMAGE_PROMPT.format(scene_desc=scene_desc)
+    try:
+        response = gemini_client.models.generate_content(
+            model="gemini-2.5-flash-image",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_modalities=["IMAGE"],
+                temperature=0.8,
+            ),
+        )
+        for part in response.candidates[0].content.parts:
+            if hasattr(part, "inline_data") and part.inline_data:
+                raw = part.inline_data.data
+                if isinstance(raw, bytes):
+                    raw = base64.b64encode(raw).decode()
+                mime = part.inline_data.mime_type or "image/png"
+                return f"data:{mime};base64,{raw}"
+    except Exception as e:
+        logger.warning("[gemini-images] single image failed: %s", e)
+    return None
+
+
+def generate_concept_images(plan: dict[str, Any], gemini_client: Any) -> dict[str, str]:
+    """Generate concept images for key scenes in parallel (one API call per scene).
+
+    Returns: dict of shot_id -> data URL (e.g. "data:image/png;base64,...")
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    try:
+        from google.genai import types  # noqa: F401 — ensure package available
+    except ImportError:
+        console.print("[yellow][gemini-images] google-genai not installed — skipping concept images[/yellow]")
+        return {}
+
+    storyboard = plan.get("storyboard", [])
+    shot_list = plan.get("shot_list", [])
+    if not storyboard:
+        return {}
+
+    # Generate concept images for all visual scenes in parallel
+    tasks: list[tuple[str, str]] = []  # (shot_id, scene_desc)
+    for i, scene in enumerate(storyboard):
+        shot = shot_list[i] if i < len(shot_list) else {}
+        shot_id = shot.get("shot_id", f"S{scene.get('scene', i+1)}")
+        scene_desc = (
+            f"Scene {scene.get('scene', i+1)} ({scene.get('asset_hint', 'lifestyle')}): "
+            f"{scene.get('desc', '')}"
+        )
+        tasks.append((shot_id, scene_desc))
+
+    if not tasks:
+        return {}
+
+    t0 = time.time()
+    console.print(f"[cyan][gemini-images] Generating {len(tasks)} concept image(s) in parallel…[/cyan]")
+
+    concept_images: dict[str, str] = {}
+    with ThreadPoolExecutor(max_workers=len(tasks)) as pool:
+        futures = {
+            pool.submit(_generate_one_concept_image, scene_desc, gemini_client): shot_id
+            for shot_id, scene_desc in tasks
+        }
+        for fut in as_completed(futures):
+            shot_id = futures[fut]
+            data_url = fut.result()
+            if data_url:
+                concept_images[shot_id] = data_url
+
+    elapsed = time.time() - t0
+    logger.info("[gemini-images] %d image(s) in %.1fs", len(concept_images), elapsed)
+    console.print(f"[green][gemini-images][/green] {len(concept_images)} concept image(s) in {elapsed:.0f}s")
+    return concept_images
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Orchestrator
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -907,8 +1136,9 @@ def run_creative_pipeline(
     state: dict[str, Any],
     project_id: str,
     llm_call: LLMCall,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, str]]:
-    """Run all 4 steps. Returns (concept, plan, prompts)."""
+    gemini_client: Any = None,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, str], dict[str, str]]:
+    """Run all 4 steps. Returns (concept, plan, prompts, concept_images)."""
     t_pipeline = time.time()
 
     # If replanning from feedback, reuse existing concept if available
@@ -931,7 +1161,7 @@ def run_creative_pipeline(
 
     # If storyboard signals clarification needed, surface it immediately
     if plan.get("clarification_needed"):
-        return concept, plan, {}
+        return concept, plan, {}, {}
 
     t3 = time.time()
     plan = run_critic(plan, llm_call)
@@ -941,8 +1171,15 @@ def run_creative_pipeline(
     prompts = run_compiler(plan, concept, state, llm_call)
     logger.info("[pipeline] compiler: %.1fs", time.time() - t4)
 
+    # Step 5 (new): Gemini interleaved concept image generation
+    concept_images: dict[str, str] = {}
+    if gemini_client is not None:
+        t5 = time.time()
+        concept_images = generate_concept_images(plan, gemini_client)
+        logger.info("[pipeline] concept_images: %.1fs", time.time() - t5)
+
     logger.info("[pipeline] total: %.1fs", time.time() - t_pipeline)
-    return concept, plan, prompts
+    return concept, plan, prompts, concept_images
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

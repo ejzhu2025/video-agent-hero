@@ -31,7 +31,9 @@ from web.auth.router import router as auth_router
 from web.billing.router import router as billing_router
 from web.feedback_api import router as feedback_router
 from web.routers.projects import router as projects_router
+from web.routers.scrape import router as scrape_router
 from web.templates import _HTML
+from web.landing import _LANDING_HTML
 
 app = FastAPI(title="Video Agent Hero")
 app.include_router(brand_kit_router)
@@ -39,6 +41,7 @@ app.include_router(auth_router)
 app.include_router(billing_router)
 app.include_router(feedback_router)
 app.include_router(projects_router)
+app.include_router(scrape_router)
 
 
 # ── Startup ───────────────────────────────────────────────────────────────────
@@ -94,9 +97,10 @@ async def _start_analysis_loop():
 
 
 class ApiKeyRequest(BaseModel):
-    anthropic_api_key: str
+    anthropic_api_key: str = ""
     fal_key: str = ""
     replicate_api_token: str = ""
+    google_api_key: str = ""
 
 
 # ── Settings & utility endpoints ──────────────────────────────────────────────
@@ -207,6 +211,7 @@ async def get_settings():
     ant_key = os.environ.get("ANTHROPIC_API_KEY", "")
     fal_key = os.environ.get("FAL_KEY", "") or os.environ.get("FAL_API_KEY", "")
     rep_token = os.environ.get("REPLICATE_API_TOKEN", "")
+    google_key = os.environ.get("GOOGLE_API_KEY", "")
     return {
         "anthropic_api_key_set": bool(ant_key),
         "anthropic_api_key_preview": _mask_key(ant_key),
@@ -214,6 +219,8 @@ async def get_settings():
         "fal_key_preview": _mask_key(fal_key),
         "replicate_api_token_set": bool(rep_token),
         "replicate_api_token_preview": _mask_key(rep_token),
+        "google_api_key_set": bool(google_key),
+        "google_api_key_preview": _mask_key(google_key),
     }
 
 
@@ -222,13 +229,15 @@ async def save_settings(req: ApiKeyRequest):
     """Set API keys for this session and persist to .env."""
     ant_key = req.anthropic_api_key.strip()
     fal_key = req.fal_key.strip()
-    if not ant_key and not fal_key:
+    google_key_check = req.google_api_key.strip()
+    if not ant_key and not fal_key and not google_key_check:
         raise HTTPException(status_code=400, detail="At least one API key must be provided")
     data_dir = Path(os.environ.get("VAH_DATA_DIR", str(Path(__file__).parent.parent / "data")))
     data_dir.mkdir(parents=True, exist_ok=True)
     env_path = data_dir / ".env"
     updates: dict[str, str] = {}
     replicate_token = req.replicate_api_token.strip()
+    google_key = req.google_api_key.strip()
     if ant_key:
         os.environ["ANTHROPIC_API_KEY"] = ant_key
         updates["ANTHROPIC_API_KEY"] = ant_key
@@ -238,12 +247,16 @@ async def save_settings(req: ApiKeyRequest):
     if replicate_token:
         os.environ["REPLICATE_API_TOKEN"] = replicate_token
         updates["REPLICATE_API_TOKEN"] = replicate_token
+    if google_key:
+        os.environ["GOOGLE_API_KEY"] = google_key
+        updates["GOOGLE_API_KEY"] = google_key
     _upsert_env_file(env_path, updates)
     return {
         "status": "ok",
         "anthropic_preview": _mask_key(ant_key) if ant_key else None,
         "fal_preview": _mask_key(fal_key) if fal_key else None,
         "replicate_preview": _mask_key(replicate_token) if replicate_token else None,
+        "google_preview": _mask_key(google_key) if google_key else None,
     }
 
 
@@ -263,6 +276,11 @@ async def serve_video(filename: str):
 
 
 @app.get("/", response_class=HTMLResponse)
+async def landing():
+    return _LANDING_HTML
+
+
+@app.get("/app", response_class=HTMLResponse)
 async def index():
     return _HTML
 

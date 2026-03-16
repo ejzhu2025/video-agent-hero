@@ -5,6 +5,9 @@ langchain-core>=0.2.38
 langchain-anthropic>=0.1.23
 # langchain-openai not needed: Anthropic is the primary LLM on HF Spaces
 
+# Google Gemini (primary LLM for hackathon — interleaved text+image output)
+google-genai>=0.8.0
+
 # Data & schemas
 pydantic>=2.7.0
 python-dotenv>=1.0.0
@@ -39,3 +42,4 @@ python-multipart>=0.0.9
 # Auth & Billing
 python-jose[cryptography]>=3.3.0
 stripe>=7.0.0
+beautifulsoup4>=4.12.0

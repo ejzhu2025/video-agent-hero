@@ -61,24 +61,114 @@ class FFmpegComposer:
 
     # ── Concatenate clips ─────────────────────────────────────────────────────
 
-    def concat_clips(self, clip_paths: list[str], output_path: str) -> None:
-        """Concatenate a list of MP4 clips using the concat demuxer."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            for p in clip_paths:
-                f.write(f"file '{os.path.abspath(p)}'\n")
-            list_path = f.name
+    def concat_clips(
+        self,
+        clip_paths: list[str],
+        output_path: str,
+        crossfade: float = 0.4,
+    ) -> None:
+        """Concatenate clips with xfade dissolve transitions between each cut.
+
+        crossfade: overlap duration in seconds (0 = hard cut, default 0.4s dissolve).
+        """
+        if not clip_paths:
+            raise ValueError("No clips to concatenate")
+
+        # Hard-cut fast path (also handles single clip)
+        if crossfade <= 0 or len(clip_paths) == 1:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+                for p in clip_paths:
+                    f.write(f"file '{os.path.abspath(p)}'\n")
+                list_path = f.name
+            try:
+                self._run([
+                    "ffmpeg", "-y",
+                    "-f", "concat", "-safe", "0",
+                    "-i", list_path,
+                    "-c", "copy",
+                    output_path,
+                ])
+            finally:
+                os.unlink(list_path)
+            return
+
+        # Probe each clip's actual duration
+        durations = [_probe_duration(p) or 2.0 for p in clip_paths]
+
+        # Safety: clamp crossfade to at most 40% of the shortest clip
+        min_dur = min(durations)
+        safe_crossfade = min(crossfade, min_dur * 0.4)
+        if safe_crossfade < 0.05:
+            # Clips are too short to crossfade — fall back to hard cut
+            safe_crossfade = 0.0
+
+        if safe_crossfade <= 0:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+                for p in clip_paths:
+                    f.write(f"file '{os.path.abspath(p)}'\n")
+                list_path = f.name
+            try:
+                self._run([
+                    "ffmpeg", "-y",
+                    "-f", "concat", "-safe", "0",
+                    "-i", list_path,
+                    "-c", "copy",
+                    output_path,
+                ])
+            finally:
+                os.unlink(list_path)
+            return
+
+        # Build xfade filter chain
+        # Input labels: [0:v], [1:v], [2:v], …
+        # Chain:  [0:v][1:v]xfade=…:offset=<o1>[v01]
+        #         [v01][2:v]xfade=…:offset=<o2>[v012]  …
+        inputs = []
+        for p in clip_paths:
+            inputs += ["-i", p]
+
+        filters = []
+        prev_label = "0:v"
+        accumulated = 0.0
+        for i in range(1, len(clip_paths)):
+            accumulated += durations[i - 1] - safe_crossfade
+            accumulated = max(accumulated, 0.01)  # never let offset go <= 0
+            out_label = f"v{''.join(str(j) for j in range(i + 1))}"
+            filters.append(
+                f"[{prev_label}][{i}:v]xfade=transition=dissolve"
+                f":duration={safe_crossfade}:offset={accumulated:.4f}[{out_label}]"
+            )
+            prev_label = out_label
+
+        cmd = [
+            "ffmpeg", "-y",
+            *inputs,
+            "-filter_complex", ";".join(filters),
+            "-map", f"[{prev_label}]",
+            "-pix_fmt", "yuv420p",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-an",
+            output_path,
+        ]
         try:
-            cmd = [
-                "ffmpeg", "-y",
-                "-f", "concat",
-                "-safe", "0",
-                "-i", list_path,
-                "-c", "copy",
-                output_path,
-            ]
-            self._run(cmd)
-        finally:
-            os.unlink(list_path)
+            self._run(cmd, timeout=300)
+        except RuntimeError:
+            # xfade failed (codec mismatch, short clips, etc.) — fall back to hard cut
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+                for p in clip_paths:
+                    f.write(f"file '{os.path.abspath(p)}'\n")
+                list_path = f.name
+            try:
+                self._run([
+                    "ffmpeg", "-y",
+                    "-f", "concat", "-safe", "0",
+                    "-i", list_path,
+                    "-c", "copy",
+                    output_path,
+                ])
+            finally:
+                os.unlink(list_path)
 
     # ── Burn subtitles ────────────────────────────────────────────────────────
 
@@ -210,6 +300,36 @@ class FFmpegComposer:
             output_path,
         ]
         self._run(cmd, timeout=180)
+
+    # ── Frame extraction ──────────────────────────────────────────────────────
+
+    def extract_frame(
+        self,
+        video_path: str,
+        output_path: str,
+        time_offset: float = 0.0,
+    ) -> str:
+        """Extract a single JPEG frame from video at time_offset seconds."""
+        cmd = [
+            "ffmpeg", "-y",
+            "-ss", f"{time_offset:.3f}",
+            "-i", video_path,
+            "-vframes", "1",
+            "-q:v", "2",
+            output_path,
+        ]
+        self._run(cmd)
+        return output_path
+
+    def get_first_frame(self, video_path: str, output_path: str) -> str:
+        """Extract the very first frame of a video."""
+        return self.extract_frame(video_path, output_path, time_offset=0.0)
+
+    def get_last_frame(self, video_path: str, output_path: str) -> str:
+        """Extract a frame ~0.1 s before the end of a video."""
+        duration = _probe_duration(video_path) or 0.0
+        offset = max(0.0, duration - 0.1)
+        return self.extract_frame(video_path, output_path, time_offset=offset)
 
     # ── Add silent audio ──────────────────────────────────────────────────────
 

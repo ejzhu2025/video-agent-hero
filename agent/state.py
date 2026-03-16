@@ -28,6 +28,7 @@ class AgentState(TypedDict, total=False):
     plan_feedback: str                  # user feedback for replan
     creative_concept: dict[str, Any]    # Director's chosen concept (hook_angle, visual_style, …)
     t2v_prompts: dict[str, Any]         # shot_id -> {positive: str, negative: str} from PromptCompiler
+    concept_images: dict[str, str]      # shot_id -> data URL (Gemini interleaved concept image)
 
     # ── Execution ─────────────────────────────────────────────────────────────
     scene_clips: list[dict]             # [{shot_id, clip_path, duration}]
@@ -49,9 +50,11 @@ class AgentState(TypedDict, total=False):
     summary: str
 
     # ── Partial re-render ─────────────────────────────────────────────────────
-    change_type: str                    # "global" | "local"
-    affected_shot_indices: list[int]    # 0-based shot indices to re-render
-    shot_updates: dict[str, Any]        # str(idx) -> {desc, text_overlay}
+    change_type: str                    # "global" | "local" | "add_scene" | "remove_scene"
+    affected_shot_indices: list[int]    # 0-based shot indices to re-render (local)
+    shot_updates: dict[str, Any]        # str(idx) -> {desc}
+    new_shots: list[dict]               # add_scene: [{position, desc, type, duration}]
+    remove_indices: list[int]           # remove_scene: 0-based indices to delete
 
     # ── Generation quality ────────────────────────────────────────────────────
     quality: str                        # "turbo" | "hd"
