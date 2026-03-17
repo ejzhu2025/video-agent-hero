@@ -328,10 +328,10 @@ _LANDING_HTML = r"""<!DOCTYPE html>
 
     <div class="phone-wrap center-phone fade-up">
       <div class="phone-frame">
-        <video class="phone-video" src="/video/113f058a_9x16_20260316_142634.mp4"
+        <video class="phone-video" src="/video/1cbaf192_9x16_20260316_171935.mp4"
           autoplay muted loop playsinline></video>
       </div>
-      <p class="phone-label">Butterfly hair clip<br>brand story</p>
+      <p class="phone-label">Face cream<br>product launch</p>
     </div>
 
     <div class="phone-wrap fade-up">
