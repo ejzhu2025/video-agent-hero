@@ -18,11 +18,12 @@ RUN pip install --no-cache-dir --timeout 600 -r requirements.txt
 # Copy project
 COPY . .
 
-# HF Spaces persistent volume
+# HF Spaces persistent volume / Cloud Run data dir
 ENV VAH_DATA_DIR=/data
 ENV PYTHONUNBUFFERED=1
 ENV ANONYMIZED_TELEMETRY=false
 
-EXPOSE 7860
+# Cloud Run uses PORT env var; HF Spaces uses 7860
+EXPOSE 8080
 
-CMD ["uvicorn", "web.server:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["sh", "-c", "uvicorn web.server:app --host 0.0.0.0 --port ${PORT:-7860}"]

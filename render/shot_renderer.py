@@ -48,6 +48,7 @@ def render_shot(
     scene = storyboard_by_shot_id.get(shot_id) or (storyboard[i] if i < len(storyboard) else {})
     desc = scene.get("desc") or "cinematic product shot"
     shot_type = shot.get("type", "wide")
+    logo_path = brand_kit.get("logo", {}).get("path", "") or ""
 
     def _i2v_module():
         if using_replicate:
@@ -60,7 +61,8 @@ def render_shot(
             from render.gemini_t2i import generate_ad_frame, build_ad_prompt
             from agent.nodes.planner_llm import get_gemini_client
             _gclient = get_gemini_client()
-            ad_prompt = build_ad_prompt(brand_kit, brief=brief, cta_text=cta_text)
+            _has_logo = bool(logo_path and Path(logo_path).exists())
+            ad_prompt = build_ad_prompt(brand_kit, brief=brief, cta_text=cta_text, has_logo=_has_logo)
             per_dur = max(0.1, round(1.0 / len(variant_image_paths), 3))
             variant_clips: list[str] = []
 
@@ -70,7 +72,8 @@ def render_shot(
                 try:
                     _poster = str(work_dir / f"{shot_id}_v{vi}_ad.png")
                     if _gclient:
-                        generate_ad_frame(vpath, ad_prompt, _poster, _gclient)
+                        generate_ad_frame(vpath, ad_prompt, _poster, _gclient,
+                                          logo_path=logo_path if _has_logo else None)
                     else:
                         _poster = vpath
                     _vout = str(work_dir / f"{shot_id}_v{vi}.mp4")
@@ -101,8 +104,10 @@ def render_shot(
                 if not gemini_client:
                     raise RuntimeError("No Gemini client")
                 ad_img_path = str(work_dir / f"{shot_id}_ad.png")
-                ad_prompt = build_ad_prompt(brand_kit, brief=brief, cta_text=cta_text)
-                generate_ad_frame(product_image_path, ad_prompt, ad_img_path, gemini_client)
+                _has_logo = bool(logo_path and Path(logo_path).exists())
+                ad_prompt = build_ad_prompt(brand_kit, brief=brief, cta_text=cta_text, has_logo=_has_logo)
+                generate_ad_frame(product_image_path, ad_prompt, ad_img_path, gemini_client,
+                                  logo_path=logo_path if _has_logo else None)
                 _outro_img = ad_img_path
                 print(f"[shot_renderer] {shot_id}: Gemini ad poster ✓", file=sys.stderr)
             except Exception as e:

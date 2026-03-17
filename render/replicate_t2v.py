@@ -86,14 +86,12 @@ def generate_clip(
             break
         except Exception as exc:
             exc_str = str(exc)
-            is_429 = (
-                getattr(exc, "status", None) == 429
-                or "429" in exc_str
-                or "throttled" in exc_str.lower()
-            )
-            if is_429 and attempt < max_retries - 1:
-                # Jitter prevents all parallel threads retrying simultaneously
-                wait = 15 * (attempt + 1) + random.uniform(0, 10)
+            status = getattr(exc, "status", None)
+            is_429 = status == 429 or "429" in exc_str or "throttled" in exc_str.lower()
+            is_5xx = status in (500, 502, 503, 504) or any(c in exc_str for c in ("502", "503", "504", "500"))
+            if (is_429 or is_5xx) and attempt < max_retries - 1:
+                wait = 10 + random.uniform(0, 5) if is_429 else 5 + random.uniform(0, 5)
+                import sys; print(f"[replicate] {'429 throttled' if is_429 else f'{status or 5}xx error'}, retrying in {wait:.0f}s (attempt {attempt+1}/{max_retries})", file=sys.stderr)
                 time.sleep(wait)
                 continue
             raise

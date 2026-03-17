@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 
-def build_ad_prompt(brand_kit: dict, brief: str = "", cta_text: str = "") -> str:
+def build_ad_prompt(brand_kit: dict, brief: str = "", cta_text: str = "", has_logo: bool = False) -> str:
     """Build a Gemini prompt that turns a product photo into a vertical ad poster."""
     colors = brand_kit.get("colors", {})
     primary = colors.get("primary") or "#333333"
@@ -28,6 +28,12 @@ def build_ad_prompt(brand_kit: dict, brief: str = "", cta_text: str = "") -> str
 
     cta_line = f'Include bold call-to-action text "{cta_text}" near the bottom of the image.' if cta_text else ""
     brand_line = f'Place brand name "{brand_name}" elegantly at the top.' if brand_name else ""
+    logo_line = (
+        "The second image is the brand logo. Place it in a natural whitespace area of the poster "
+        "(top corner or bottom corner, wherever there is open space that does not overlap the product). "
+        "Keep the logo clearly legible, sized proportionally — not too large, not too small. "
+        "Do not distort or recolor the logo."
+    ) if has_logo else ""
 
     return (
         f"Transform this product photo into a professional vertical 9:16 social media advertisement poster. "
@@ -35,8 +41,9 @@ def build_ad_prompt(brand_kit: dict, brief: str = "", cta_text: str = "") -> str
         f"{atmosphere}. "
         f"Background: rich color palette of {primary} and {bg_color}, smooth gradient, cinematic depth of field. "
         f"{brand_line} "
+        f"{logo_line} "
         f"{cta_line} "
-        f"Style: high-end commercial photography, no watermarks, no extra people, photorealistic, "
+        f"Style: high-end commercial photography, no extra people, photorealistic, "
         f"magazine-quality advertisement. Output exactly one complete poster image."
     )
 
@@ -46,28 +53,30 @@ def generate_ad_frame(
     prompt: str,
     output_path: str,
     gemini_client: Any,
+    logo_path: str | None = None,
 ) -> str:
     """Generate an ad poster from a product photo using Gemini image generation.
 
-    Sends the product image + prompt to Gemini, gets back a generated poster image.
+    If logo_path is provided, passes both the product image and logo to Gemini
+    so it can compose the logo into natural whitespace in the poster.
     """
     from google.genai import types
 
-    img_bytes = Path(product_image_path).read_bytes()
-    ext = Path(product_image_path).suffix.lower().lstrip(".")
-    mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
-    b64 = base64.b64encode(img_bytes).decode()
+    def _img_part(path: str) -> dict:
+        img_bytes = Path(path).read_bytes()
+        ext = Path(path).suffix.lower().lstrip(".")
+        mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+                "webp": "image/webp", "ico": "image/png"}.get(ext, "image/jpeg")
+        return {"inline_data": {"mime_type": mime, "data": base64.b64encode(img_bytes).decode()}}
+
+    parts: list = [_img_part(product_image_path)]
+    if logo_path and Path(logo_path).exists() and Path(logo_path).stat().st_size > 100:
+        parts.append(_img_part(logo_path))
+    parts.append({"text": prompt})
 
     response = gemini_client.models.generate_content(
         model="gemini-2.5-flash-image",
-        contents=[
-            {
-                "parts": [
-                    {"inline_data": {"mime_type": mime, "data": b64}},
-                    {"text": prompt},
-                ]
-            }
-        ],
+        contents=[{"parts": parts}],
         config=types.GenerateContentConfig(
             response_modalities=["IMAGE"],
             temperature=0.7,

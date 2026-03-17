@@ -21,14 +21,6 @@ def caption_agent(state: dict[str, Any]) -> dict[str, Any]:
     if script.get("cta"):
         all_lines.append(script["cta"])
 
-    # Also pull text_overlay lines from shot_list (non-empty unique ones)
-    overlay_lines = [s["text_overlay"] for s in shot_list if s.get("text_overlay")]
-    # Merge: prefer script lines; supplement with overlay if script is sparse
-    if len(all_lines) < len(shot_list):
-        for ol in overlay_lines:
-            if ol not in all_lines:
-                all_lines.append(ol)
-
     # Map lines to time segments proportional to shot durations
     shot_durations = [float(s.get("duration", 2.5)) for s in shot_list]
     if not shot_durations:

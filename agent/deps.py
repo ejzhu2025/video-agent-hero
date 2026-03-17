@@ -2,11 +2,27 @@
 from __future__ import annotations
 
 import os
+from typing import Callable, Any
 from memory.db import Database
 from memory.vector_store import VectorStore
 
 _db: Database | None = None
 _vs: VectorStore | None = None
+_emit_fn: Callable[[dict], None] | None = None  # set per-run by the SSE handler
+
+
+def set_emit(fn: Callable[[dict], None] | None) -> None:
+    global _emit_fn
+    _emit_fn = fn
+
+
+def emit(event: dict) -> None:
+    """Fire a structured SSE event from any node/thread."""
+    if _emit_fn is not None:
+        try:
+            _emit_fn(event)
+        except Exception:
+            pass
 
 
 def init(data_dir: str | None = None) -> None:

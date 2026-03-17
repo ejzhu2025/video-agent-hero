@@ -24,7 +24,7 @@ def layout_branding(state: dict[str, Any]) -> dict[str, Any]:
     # 1. Concatenate all scene clips into raw video
     clip_paths = [c["clip_path"] for c in scene_clips]
     raw_path = str(work_dir / "raw_concat.mp4")
-    fc.concat_clips(clip_paths, raw_path, crossfade=0.4)
+    fc.concat_clips(clip_paths, raw_path, crossfade=0.0)
 
     # 2. Write SRT for reference only — subtitles are NOT burned into the video.
     #    Text overlays in the shot list are handled by FrameGenerator on the outro frame.
