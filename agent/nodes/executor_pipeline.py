@@ -81,7 +81,7 @@ def executor_pipeline(state: dict[str, Any]) -> dict[str, Any]:
                     _gclient = get_gemini_client()
                     ad_prompt = build_ad_prompt(brand_kit, brief=state.get("brief", ""), cta_text=cta_text)
                     variant_clips: list[str] = []
-                    per_variant_dur = max(1.0, round(duration / len(variant_image_paths), 1))
+                    per_variant_dur = max(0.1, round(1.0 / len(variant_image_paths), 3))
 
                     for vi, vpath in enumerate(variant_image_paths):
                         if not Path(vpath).exists():
