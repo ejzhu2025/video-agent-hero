@@ -8,15 +8,15 @@ from pydantic import BaseModel, Field
 # ── Brand Kit ─────────────────────────────────────────────────────────────────
 
 class LogoConfig(BaseModel):
-    path: str = "assets/tong_sui_logo.png"
+    path: str = ""
     safe_area: str = "top_right"  # top_right | top_left | bottom_right | bottom_left
 
 
 class ColorPalette(BaseModel):
-    primary: str = "#00B894"
+    primary: str = "#333333"
     secondary: str = "#FFFFFF"
-    accent: str = "#FF7675"
-    background: str = "#1A1A2E"
+    accent: str = "#666666"
+    background: str = "#111111"
 
 
 class FontConfig(BaseModel):
