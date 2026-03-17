@@ -320,7 +320,7 @@ _LANDING_HTML = r"""<!DOCTYPE html>
 
     <div class="phone-wrap fade-up">
       <div class="phone-frame">
-        <video class="phone-video" src="/video/23dc9aeb_9x16_20260306_005832.mp4"
+        <video class="phone-video" src="/demos/demo_skincare.mp4"
           autoplay muted loop playsinline></video>
       </div>
       <p class="phone-label">Skincare serum<br>product launch</p>
@@ -328,7 +328,7 @@ _LANDING_HTML = r"""<!DOCTYPE html>
 
     <div class="phone-wrap center-phone fade-up">
       <div class="phone-frame">
-        <video class="phone-video" src="/video/1cbaf192_9x16_20260316_171935.mp4"
+        <video class="phone-video" src="/demos/demo_face_cream.mp4"
           autoplay muted loop playsinline></video>
       </div>
       <p class="phone-label">Face cream<br>product launch</p>
@@ -336,7 +336,7 @@ _LANDING_HTML = r"""<!DOCTYPE html>
 
     <div class="phone-wrap fade-up">
       <div class="phone-frame">
-        <video class="phone-video" src="/video/38f09872_9x16_20260304_195543.mp4"
+        <video class="phone-video" src="/demos/demo_beverage.mp4"
           autoplay muted loop playsinline></video>
       </div>
       <p class="phone-label">Lifestyle beverage<br>social campaign</p>

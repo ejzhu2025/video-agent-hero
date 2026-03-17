@@ -260,6 +260,17 @@ async def save_settings(req: ApiKeyRequest):
     }
 
 
+@app.get("/demos/{filename}")
+async def serve_demo(filename: str):
+    """Serve bundled demo videos."""
+    if not filename.endswith(".mp4") or "/" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    demo_path = Path(__file__).parent / "static" / "demos" / filename
+    if not demo_path.exists():
+        raise HTTPException(status_code=404, detail="Demo not found")
+    return FileResponse(demo_path, media_type="video/mp4")
+
+
 @app.get("/video/{filename}")
 async def serve_video(filename: str):
     """Serve a video file from the exports directory."""
