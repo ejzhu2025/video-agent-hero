@@ -598,6 +598,33 @@ _HTML = r"""<!DOCTYPE html>
           <select id="brand-select" class="hidden" onchange="selectedBrandId = this.value">
           </select>
 
+          <!-- Scrape-failure inline hint (shown when URL import fails with no brand intel) -->
+          <div id="scrape-hint" class="hidden flex items-start gap-2 px-3 py-2.5 rounded-xl text-sm" style="background:rgba(255,184,0,.10);border:1px solid rgba(255,184,0,.25);">
+            <svg class="flex-shrink-0 mt-0.5" width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1.5L1 13.5h13L7.5 1.5z" stroke="#FFB800" stroke-width="1.3" stroke-linejoin="round"/><path d="M7.5 6v3.5M7.5 11v.5" stroke="#FFB800" stroke-width="1.3" stroke-linecap="round"/></svg>
+            <span style="color:rgba(255,220,100,.9)">Couldn't read that page. Describe your product below and we'll generate the video from your description.</span>
+          </div>
+
+          <!-- Brand Intelligence card (shown when scrape fails but LLM knows the brand) -->
+          <div id="brand-intel-card" class="hidden rounded-xl overflow-hidden" style="border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);">
+            <div class="flex items-center gap-3 px-3 pt-3 pb-2">
+              <div class="w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.08)">
+                <img id="brand-intel-logo" src="" alt="" class="w-full h-full object-contain" onerror="this.style.display='none'"/>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div id="brand-intel-name" class="text-sm font-semibold truncate" style="color:var(--text1)"></div>
+                <div id="brand-intel-desc" class="text-xs truncate mt-0.5" style="color:var(--text3)"></div>
+              </div>
+              <button onclick="_dismissIntelCard()" class="flex-shrink-0 p-1 rounded opacity-50 hover:opacity-100 transition-opacity">
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M1 1l9 9M10 1L1 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+            <div id="brand-intel-tags" class="flex flex-wrap gap-1.5 px-3 pb-2.5"></div>
+            <div class="flex gap-2 px-3 pb-3">
+              <button onclick="_dismissIntelCard()" class="flex-1 text-xs py-2 rounded-lg" style="background:rgba(255,255,255,.07);color:var(--text2)">Edit manually</button>
+              <button onclick="createAndPlan()" class="text-xs py-2 px-5 rounded-lg font-semibold" style="background:var(--gold);color:#000">Generate video →</button>
+            </div>
+          </div>
+
           <!-- Product image preview (shown when file attached) -->
           <div id="product-preview-bar" class="hidden flex items-center gap-2 px-1">
             <img id="product-preview-img" src="" alt="product" class="h-9 w-9 object-cover rounded-lg" style="border:1px solid var(--sep)"/>
@@ -871,8 +898,12 @@ function setAppState(state) {
       advPanel.classList.remove('hidden');
       if (advIcon) advIcon.textContent = '▼';
     }
-    // Auto-close when returning to idle/error so the UI stays clean
-    if (cfg.urlBar && !advPanel.classList.contains('hidden')) {
+    // Auto-close when returning to idle/error — but NOT if the scrape hint or brand intel card is showing
+    const scrapeHint = document.getElementById('scrape-hint');
+    const scrapeHintVisible = scrapeHint && !scrapeHint.classList.contains('hidden');
+    const intelCard = document.getElementById('brand-intel-card');
+    const intelCardVisible = intelCard && !intelCard.classList.contains('hidden');
+    if (cfg.urlBar && !advPanel.classList.contains('hidden') && !scrapeHintVisible && !intelCardVisible) {
       advPanel.classList.add('hidden');
       if (advIcon) advIcon.textContent = '▶';
     }
@@ -958,7 +989,13 @@ async function selectProject(id) {
 
     clearAgentLog();
 
-    if (proj.status === 'done') {
+    if (proj.status === 'done' && (proj.output_paths || []).length === 0 && proj.latest_plan_json) {
+      // Done but no video — execution never completed; let user approve & re-generate
+      currentPlan = proj.latest_plan_json;
+      renderPlan(currentPlan, true);
+      switchTab('plan');
+      setAppState('plan_ready');
+    } else if (proj.status === 'done') {
       setAppState('done');
       if (_run_events_cache[id]) replayEvents(_run_events_cache[id]);
       if ((proj.output_paths || []).length) loadProjectVideo(id);
@@ -1047,8 +1084,13 @@ async function importProductUrl() {
     const data = await api('POST', '/api/scrape-product', { url });
 
     if (data.error) {
-      toast('Could not read that page — please describe your product below instead.', 'error');
       _fallbackToDescriptionMode();
+      return;
+    }
+
+    // Brand Intelligence mode: LLM knows the brand but page couldn't be scraped
+    if (data.mode === 'intelligence') {
+      _showBrandIntelCard(data);
       return;
     }
 
@@ -1091,9 +1133,10 @@ async function importProductUrl() {
       document.getElementById('product-preview-bar').classList.remove('hidden');
     }
 
+    // Remember URL so user doesn't have to re-enter it
+    try { localStorage.setItem('last_product_url', url); } catch(e) {}
     toast('Product imported — click Generate to create your video', 'success');
   } catch (e) {
-    toast('Could not read that page — please describe your product below instead.', 'error');
     _fallbackToDescriptionMode();
   } finally {
     loading.classList.add('hidden');
@@ -1106,20 +1149,115 @@ function _fallbackToDescriptionMode() {
   const input = document.getElementById('url-input');
   if (input) input.value = '';
 
+  // Show the inline hint banner
+  const hint = document.getElementById('scrape-hint');
+  if (hint) hint.classList.remove('hidden');
+
   // Open the advanced options panel so textarea is visible
   const panel = document.getElementById('advanced-options');
   const icon = document.getElementById('advanced-toggle-icon');
-  if (panel && panel.classList.contains('hidden')) {
+  if (panel) {
     panel.classList.remove('hidden');
     if (icon) icon.textContent = '▼';
   }
 
-  // Focus the textarea with a hint
+  // Focus the textarea and highlight it to draw attention
   const chatInput = document.getElementById('chat-input');
   if (chatInput) {
-    chatInput.placeholder = 'Describe your product here…';
+    chatInput.placeholder = 'e.g. Matcha latte with oat milk, great for health-conscious Gen Z…';
+    chatInput.focus();
+    // Brief highlight animation so user sees where to type
+    const wrap = chatInput.closest('.chat-input');
+    if (wrap) {
+      wrap.style.borderColor = 'rgba(255,184,0,.6)';
+      wrap.style.boxShadow = '0 0 0 2px rgba(255,184,0,.15)';
+      setTimeout(() => {
+        wrap.style.borderColor = '';
+        wrap.style.boxShadow = '';
+      }, 2500);
+    }
+  }
+}
+
+// ── Brand Intelligence card ────────────────────────────────────────────────────
+
+function _showBrandIntelCard(data) {
+  // Store in standard scrape globals so the pipeline gets enriched
+  _scrapedProductInfo     = data;
+  _scrapedProductCategory = data.product_category || '';
+  _scrapedProductName     = data.brand_name || '';
+  _scrapedImagePath       = data.logo_path || null;
+
+  // Pre-fill textarea with AI brief
+  const chatInput = document.getElementById('chat-input');
+  if (chatInput && data.brief) {
+    chatInput.value = data.brief;
+    chatInput.dataset.scrapedBrief = data.brief;
+    chatInput.style.height = 'auto';
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+  }
+
+  // Populate card header
+  const logo = document.getElementById('brand-intel-logo');
+  if (logo) { logo.src = data.logo_url || ''; }
+  document.getElementById('brand-intel-name').textContent = data.brand_name || '';
+  document.getElementById('brand-intel-desc').textContent = data.brand_description || '';
+
+  // Render style-tone tags as toggleable chips
+  const tagsEl = document.getElementById('brand-intel-tags');
+  tagsEl.innerHTML = '';
+  (data.style_tone || []).forEach(tone => {
+    const btn = document.createElement('button');
+    btn.className = 'intel-tag selected text-xs px-2.5 py-1 rounded-full transition-all';
+    btn.textContent = tone;
+    btn.dataset.tone = tone;
+    btn.style.cssText = 'background:rgba(212,175,55,.18);color:rgba(212,175,55,.9);border:1px solid rgba(212,175,55,.3)';
+    btn.onclick = () => _toggleIntelTag(btn);
+    tagsEl.appendChild(btn);
+  });
+
+  // Show card + open panel
+  document.getElementById('brand-intel-card').classList.remove('hidden');
+  const advPanel = document.getElementById('advanced-options');
+  const advIcon  = document.getElementById('advanced-toggle-icon');
+  if (advPanel) { advPanel.classList.remove('hidden'); if (advIcon) advIcon.textContent = '▼'; }
+
+  // Gold pulse on textarea
+  if (chatInput) {
+    const wrap = chatInput.closest('.chat-input');
+    if (wrap) {
+      wrap.style.borderColor = 'rgba(212,175,55,.5)';
+      setTimeout(() => { wrap.style.borderColor = ''; }, 2500);
+    }
     chatInput.focus();
   }
+}
+
+function _toggleIntelTag(btn) {
+  const selected = btn.classList.toggle('selected');
+  btn.style.cssText = selected
+    ? 'background:rgba(212,175,55,.18);color:rgba(212,175,55,.9);border:1px solid rgba(212,175,55,.3)'
+    : 'background:rgba(255,255,255,.06);color:var(--text3);border:1px solid rgba(255,255,255,.1)';
+  const tones = [...document.querySelectorAll('#brand-intel-tags .intel-tag.selected')].map(b => b.dataset.tone);
+  if (_scrapedProductInfo) _scrapedProductInfo.style_tone = tones;
+}
+
+function _dismissIntelCard() {
+  document.getElementById('brand-intel-card').classList.add('hidden');
+  _scrapedProductInfo = null;
+  _scrapedProductName = '';
+  _scrapedImagePath   = null;
+  const chatInput = document.getElementById('chat-input');
+  if (chatInput) { chatInput.value = ''; delete chatInput.dataset.scrapedBrief; }
+  _fallbackToDescriptionMode();
+}
+
+function _clearScrapeHint() {
+  const hint = document.getElementById('scrape-hint');
+  if (hint) hint.classList.add('hidden');
+  document.getElementById('brand-intel-card').classList.add('hidden');
+  const chatInput = document.getElementById('chat-input');
+  if (chatInput) chatInput.placeholder = 'Add extra instructions or describe your video…';
 }
 
 function toggleAdvancedOptions() {
@@ -1131,6 +1269,7 @@ function toggleAdvancedOptions() {
 
 function clearProductCard() {
   document.getElementById('product-card').classList.add('hidden');
+  document.getElementById('brand-intel-card').classList.add('hidden');
   document.getElementById('url-input').value = '';
   document.getElementById('product-preview-bar').classList.add('hidden');
   _scrapedImagePath = null;
@@ -1240,6 +1379,7 @@ async function handleChatSend() {
       }
     }
 
+    _clearScrapeHint();
     const brief = textInput.value.trim() || url;
     textInput.value = ''; textInput.style.height = 'auto';
     await createAndPlan(brief);
@@ -2744,19 +2884,31 @@ if (urlParams.get('payment') === 'success') {
 loadAuthState();
 loadChangelog();
 
-// Auto-fill URL from landing page referral (?url=...)
+// Auto-fill URL from landing page referral (?url=...) or localStorage
 (function() {
   const params = new URLSearchParams(window.location.search);
   const preUrl = params.get('url');
+  const el = document.getElementById('url-input');
+  if (!el) return;
   if (preUrl) {
-    const el = document.getElementById('url-input');
-    if (el) {
-      el.value = preUrl;
-      el.dispatchEvent(new Event('input'));
-    }
+    el.value = preUrl;
+    el.dispatchEvent(new Event('input'));
     history.replaceState({}, '', '/app');
+  } else {
+    try {
+      const saved = localStorage.getItem('last_product_url');
+      if (saved) el.value = saved;
+    } catch(e) {}
   }
 })();
+
+// Detect Amazon URLs and warn user upfront
+document.getElementById('url-input').addEventListener('blur', function() {
+  const val = this.value.trim();
+  if (val && /amazon\.(com|co\.uk|co\.jp|de|fr|ca|com\.au|in)/i.test(val)) {
+    toast('Amazon blocks automated scraping. If import fails, please upload a product image instead.', 'error');
+  }
+});
 setInterval(loadChangelog, 60 * 60 * 1000); // refresh changelog every hour
 </script>
 </body>

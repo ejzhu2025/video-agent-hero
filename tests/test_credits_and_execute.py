@@ -79,6 +79,11 @@ def make_fake_db(tmp_db):
     class FakeDB:
         db_path = tmp_db
 
+        def _conn(self):
+            c = sqlite3.connect(str(tmp_db))
+            c.row_factory = sqlite3.Row
+            return c
+
         def get_project(self, pid):
             conn = sqlite3.connect(str(tmp_db))
             conn.row_factory = sqlite3.Row
@@ -139,11 +144,16 @@ class TestCreditsModule:
         import agent.deps as deps
 
         class FakeDB:
-            db_path = tmp_db
+            def __init__(self, path):
+                self.db_path = path
+            def _conn(self):
+                c = sqlite3.connect(str(self.db_path))
+                c.row_factory = sqlite3.Row
+                return c
 
-        with patch.object(deps, 'db', return_value=FakeDB()):
-            with patch('web.auth.models.ensure_schema'):
-                new_bal = deduct_credits('real_user_id', 3)
+        with patch.object(deps, 'db', return_value=FakeDB(tmp_db)), \
+             patch('web.auth.models.ensure_schema'):
+            new_bal = deduct_credits('real_user_id', 3)
         assert new_bal == 7
 
     def test_deduct_credits_insufficient_raises(self, tmp_db):
@@ -151,12 +161,17 @@ class TestCreditsModule:
         import agent.deps as deps
 
         class FakeDB:
-            db_path = tmp_db
+            def __init__(self, path):
+                self.db_path = path
+            def _conn(self):
+                c = sqlite3.connect(str(self.db_path))
+                c.row_factory = sqlite3.Row
+                return c
 
-        with patch.object(deps, 'db', return_value=FakeDB()):
-            with patch('web.auth.models.ensure_schema'):
-                with pytest.raises(ValueError, match="Insufficient"):
-                    deduct_credits('real_user_id', 100)  # only has 6
+        with patch.object(deps, 'db', return_value=FakeDB(tmp_db)), \
+             patch('web.auth.models.ensure_schema'):
+            with pytest.raises(ValueError, match="Insufficient"):
+                deduct_credits('real_user_id', 100)  # only has 6
 
     def test_cost_for_plan_turbo(self):
         from web.billing.credits import cost_for_plan

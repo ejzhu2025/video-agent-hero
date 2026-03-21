@@ -48,9 +48,13 @@ def _resolve_user_id(auth_user, request: Request) -> str:
 
 
 def _check_project_ownership(proj: dict, user_id: str) -> None:
-    """Raise 403 if the requester doesn't own this project."""
+    """Raise 403 if the requester doesn't own this project.
+    Legacy projects (owned by 'ej', 'default', etc.) are accessible by any authenticated user.
+    """
     if proj.get("user_id") == user_id:
         return
+    if proj.get("user_id") in _LEGACY_USER_IDS:
+        return  # legacy projects are open to all authenticated users
     raise HTTPException(status_code=403, detail="Access denied")
 
 

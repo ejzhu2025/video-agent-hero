@@ -36,12 +36,46 @@ from web.templates import _HTML
 from web.landing import _LANDING_HTML
 
 app = FastAPI(title="Video Agent Hero")
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://adreel.studio",
+        "https://www.adreel.studio",
+        # Cloud Run direct URLs (used during testing / before custom domain resolves)
+        "https://ads-video-hero-716019218505.us-central1.run.app",
+        "https://ads-video-hero-staging-716019218505.us-central1.run.app",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(brand_kit_router)
 app.include_router(auth_router)
 app.include_router(billing_router)
 app.include_router(feedback_router)
 app.include_router(projects_router)
 app.include_router(scrape_router)
+
+
+# ── HTTPS redirect middleware ─────────────────────────────────────────────────
+from fastapi import Request
+from fastapi.responses import RedirectResponse as _Redirect
+
+@app.middleware("http")
+async def https_redirect(request: Request, call_next):
+    # Cloud Run forwards the original scheme in X-Forwarded-Proto
+    proto = request.headers.get("x-forwarded-proto", "https")
+    if proto == "http":
+        url = request.url.replace(scheme="https")
+        return _Redirect(str(url), status_code=301)
+    response = await call_next(request)
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 
 # ── Startup ───────────────────────────────────────────────────────────────────

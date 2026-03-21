@@ -296,16 +296,23 @@ def _apply_fixes(fixes: list[dict], batch_id: str, db) -> None:
 # ── Midnight scheduler (registered at startup) ────────────────────────────────
 
 async def daily_analysis_loop() -> None:
-    """Async loop: sleep until next midnight UTC, run analysis, repeat."""
+    """Async loop: sleep until next midnight UTC, run analysis + PM insights, repeat."""
     import asyncio
     while True:
         now = datetime.now(timezone.utc)
         next_run = (now + timedelta(days=1)).replace(hour=0, minute=5, second=0, microsecond=0)
         await asyncio.sleep((next_run - now).total_seconds())
         try:
-            await __import__("asyncio").to_thread(run_daily_analysis)
+            await asyncio.to_thread(run_daily_analysis)
         except Exception as exc:
-            logger.error("[analysis] Daily run failed: %s", exc)
+            logger.error("[analysis] Daily feedback analysis failed: %s", exc)
+        # Run PM insights 5 min after feedback analysis (needs analysis results in DB)
+        await asyncio.sleep(300)
+        try:
+            from ai_team.pm_insights import run as run_pm_insights
+            await asyncio.to_thread(run_pm_insights)
+        except Exception as exc:
+            logger.error("[analysis] PM insights failed: %s", exc)
 
 
 # ── CLI entry point ────────────────────────────────────────────────────────────

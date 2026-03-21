@@ -139,6 +139,28 @@ Only include actual product photo URLs (jpg/png/webp), not swatches or icons."""
         }
 
 
+def _google_image_search(query: str) -> str | None:
+    """Search Google Custom Search for a product image, return the first image URL."""
+    api_key = os.getenv("GOOGLE_API_KEY")
+    cx = os.getenv("GOOGLE_CSE_ID")
+    if not api_key or not cx:
+        return None
+    try:
+        import httpx
+        resp = httpx.get(
+            "https://www.googleapis.com/customsearch/v1",
+            params={"key": api_key, "cx": cx, "q": query, "searchType": "image", "num": 1},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        items = resp.json().get("items", [])
+        if items:
+            return items[0].get("link")
+    except Exception:
+        pass
+    return None
+
+
 def _dominant_color_from_image(image_path: str | None) -> str:
     """Extract the most visually prominent non-white/non-black color from a product image."""
     if not image_path:
@@ -279,13 +301,125 @@ async def _playwright_get_html(url: str) -> str | None:
         return None
 
 
+async def _jina_fetch(url: str) -> str | None:
+    """Fetch via Jina AI Reader (r.jina.ai) which handles JS-rendered pages for free."""
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+            resp = await client.get(
+                f"https://r.jina.ai/{url}",
+                headers={"Accept": "text/markdown", "X-No-Cache": "true"},
+            )
+            resp.raise_for_status()
+            text = resp.text.strip()
+            if len(text) > 300:
+                return text
+    except Exception:
+        pass
+    return None
+
+
+async def _brand_intelligence_fallback(url: str, data_dir: Path) -> dict[str, Any]:
+    """When scraping fails, use LLM knowledge + Clearbit logo to return brand info."""
+    import anthropic
+    from urllib.parse import urlparse
+
+    domain = urlparse(url).netloc.lstrip("www.")
+    brand_name_guess = domain.split(".")[0].title()
+
+    # Ask Claude Haiku what it knows about this brand
+    brand_raw: dict = {}
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if api_key:
+        try:
+            client = anthropic.Anthropic(api_key=api_key)
+            prompt = f"""A user wants a video ad for a product from: {url}
+The page couldn't be scraped. Using your knowledge of {domain}, return brand info as JSON.
+
+Return ONLY valid JSON, no markdown:
+{{
+  "brand_name": "<brand name>",
+  "brand_description": "<one sentence: what they sell and who it's for>",
+  "product_category": "<e.g. fashion, food & beverage, beauty, electronics, activewear>",
+  "style_tone": ["<2-3 from: fresh, premium, playful, bold, serene, luxurious, energetic, minimal>"],
+  "primary_color_hex": "<brand's signature color as hex>",
+  "brief": "<2-3 sentence TikTok/Reels video brief, emotional story not specs>",
+  "known_brand": <true if you know this brand, false if unfamiliar>
+}}"""
+            resp = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=500,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            text = resp.content[0].text.strip()
+            text = re.sub(r"^```(?:json)?\s*", "", text)
+            text = re.sub(r"\s*```$", "", text)
+            brand_raw = json.loads(text)
+        except Exception as e:
+            print(f"[scrape] Brand intelligence LLM failed: {e}")
+
+    brand_name = brand_raw.get("brand_name") or brand_name_guess
+    img_dir = data_dir / "uploads" / "logos"
+
+    # Try logo sources in order: Clearbit → Google CSE → Google Favicon
+    logo_url = ""
+    logo_path = None
+
+    clearbit = f"https://logo.clearbit.com/{domain}"
+    logo_path = _download_image(clearbit, img_dir)
+    if logo_path:
+        logo_url = clearbit
+
+    if not logo_path:
+        cse_url = _google_image_search(f"{brand_name} logo transparent")
+        if cse_url:
+            logo_path = _download_image(cse_url, img_dir)
+            logo_url = cse_url or ""
+
+    if not logo_path:
+        favicon = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
+        logo_path = _download_image(favicon, img_dir)
+        logo_url = favicon if logo_path else ""
+
+    primary_color = brand_raw.get("primary_color_hex", "#333333")
+    brief = brand_raw.get("brief", f"Create a compelling video ad for {brand_name}.")
+
+    return {
+        "mode": "intelligence",
+        "brand_name": brand_name,
+        "brand_description": brand_raw.get("brand_description", f"Products from {domain}"),
+        "product_name": brand_name,
+        "product_category": brand_raw.get("product_category", "product"),
+        "style_tone": brand_raw.get("style_tone", ["fresh"]),
+        "brief": brief,
+        "primary_color": primary_color,
+        "logo_url": logo_url,
+        "logo_path": logo_path or "",
+        "known_brand": brand_raw.get("known_brand", False),
+        # Standard pipeline fields
+        "key_features": [],
+        "emotional_hook": brief,
+        "image_path": logo_path or "",
+        "image_url": logo_url,
+        "variant_image_paths": [],
+        "brand_info": {
+            "brand_name": brand_name,
+            "primary_color": primary_color,
+            "logo_path": logo_path or "",
+            "logo_url": logo_url,
+        },
+    }
+
+
 async def scrape_product(url: str, data_dir: Path, gemini_client: Any) -> dict[str, Any]:
     """Main entry: fetch URL → extract → Gemini brief → download image.
 
     Strategy:
     1. Fast httpx fetch → BeautifulSoup parse
-    2. If blocked/empty → Playwright headless browser → BeautifulSoup parse
-    3. If still empty → Playwright screenshot → Gemini Vision (last resort)
+    2. Jina AI Reader (handles JS rendering, most anti-bot) → Gemini extract
+    3. Playwright headless browser → BeautifulSoup parse
+    4. Playwright screenshot → Gemini Vision
+    5. Brand Intelligence fallback (LLM knowledge + Clearbit logo)
     """
     import httpx
 
@@ -303,23 +437,42 @@ async def scrape_product(url: str, data_dir: Path, gemini_client: Any) -> dict[s
     except Exception:
         pass
 
-    # 2. Parse; if empty/JS-rendered, upgrade to Playwright HTML fetch
-    content = _extract_page_content(html, url) if html else {"title": "", "body_text": "", "description": "", "image_url": "", "schema": "", "url": url}
+    # Parse HTML; check if useful content extracted
+    content = _extract_page_content(html, url) if html else {
+        "title": "", "body_text": "", "description": "",
+        "image_url": "", "schema": "", "url": url,
+    }
 
+    # 2. If empty (SPA / blocked), try Jina AI Reader
     if not content["title"] and not content["body_text"]:
-        # Try Playwright to get fully-rendered HTML
+        jina_text = await _jina_fetch(url)
+        if jina_text:
+            # Extract title from first markdown heading
+            first_line = jina_text.split("\n")[0].lstrip("# ").strip()
+            content = {
+                "url": url,
+                "title": first_line[:200],
+                "description": "",
+                "image_url": "",
+                "schema": "",
+                "body_text": jina_text[:3000],
+            }
+
+    # 3. If still empty, try Playwright HTML fetch
+    if not content["title"] and not content["body_text"]:
         pw_html = await _playwright_get_html(url)
         if pw_html:
             content = _extract_page_content(pw_html, url)
 
+    # 4. Last resort: Playwright screenshot → Gemini Vision
     if not content["title"] and not content["body_text"]:
-        # Last resort: screenshot → Gemini Vision
         if gemini_client:
             try:
                 return await _screenshot_extract(url, data_dir, gemini_client)
-            except Exception as e:
-                return {"error": f"Could not extract product info: {e}"}
-        return {"error": "Could not read this page. Please describe your product manually."}
+            except Exception:
+                pass
+        # 5. Brand Intelligence fallback — LLM knowledge + logo
+        return await _brand_intelligence_fallback(url, data_dir)
 
     # 3. Gemini extraction
     extracted = _gemini_extract(content, gemini_client) if gemini_client else {
@@ -333,9 +486,14 @@ async def scrape_product(url: str, data_dir: Path, gemini_client: Any) -> dict[s
         "product_category": "",
     }
 
-    # 4. Download main product image
+    # 4. Download main product image; fall back to Google Image Search if missing
     img_dir = data_dir / "uploads"
-    image_path = _download_image(content["image_url"], img_dir)
+    image_url = content["image_url"]
+    if not image_url:
+        product_name = extracted.get("product_name", "") or content.get("title", "")
+        if product_name:
+            image_url = _google_image_search(product_name) or ""
+    image_path = _download_image(image_url, img_dir)
 
     # 5. Download variant images (for color-variant outro)
     variant_urls = extracted.pop("variant_image_urls", []) or []
@@ -384,7 +542,7 @@ async def scrape_product(url: str, data_dir: Path, gemini_client: Any) -> dict[s
     return {
         **extracted,
         "image_path": image_path,
-        "image_url": content["image_url"],
+        "image_url": image_url,
         "variant_image_paths": variant_paths,
         "brand_info": brand_info,
     }

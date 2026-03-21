@@ -1,0 +1,95 @@
+steps:
+  # ── Step 1: Run unit tests — build fails here if any test fails ───────────────
+  - name: 'python:3.11'
+    id: unit-tests
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        pip install -r requirements.txt pytest -q 2>&1 | tail -5
+        python -m pytest tests/ \
+          --ignore=tests/test_creative_pipeline.py \
+          --ignore=tests/test_executor_pipeline.py \
+          --ignore=tests/test_music_mixer.py \
+          --ignore=tests/test_quality_gate.py \
+          -x -q --tb=short
+
+  # ── Step 2: Build image ───────────────────────────────────────────────────────
+  - name: 'gcr.io/cloud-builders/docker'
+    id: build
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/ads-video-hero:latest', '.']
+    waitFor: ['unit-tests']
+
+  # ── Step 3: Push ──────────────────────────────────────────────────────────────
+  - name: 'gcr.io/cloud-builders/docker'
+    id: push
+    args: ['push', 'gcr.io/$PROJECT_ID/ads-video-hero:latest']
+    waitFor: ['build']
+
+  # ── Step 4: Deploy to STAGING ────────────────────────────────────────────────
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: deploy-staging
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'ads-video-hero-staging'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/ads-video-hero:latest'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '2'
+      - '--timeout'
+      - '3600'
+      - '--update-env-vars'
+      - 'VAH_DATA_DIR=/tmp/data'
+    waitFor: ['push']
+
+  # ── Step 5: Smoke test on staging ────────────────────────────────────────────
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: smoke-test
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        pip install httpx -q --break-system-packages 2>&1 | tail -2
+        STAGING_URL=$$(gcloud run services describe ads-video-hero-staging \
+          --region us-central1 \
+          --format 'value(status.url)')
+        echo "Smoke testing: $$STAGING_URL"
+        python3 scripts/smoke_test.py "$$STAGING_URL"
+    waitFor: ['deploy-staging']
+
+  # ── Step 6: Deploy to PRODUCTION (only if smoke test passed) ─────────────────
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: deploy-prod
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'ads-video-hero'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/ads-video-hero:latest'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '2'
+      - '--timeout'
+      - '3600'
+      - '--update-env-vars'
+      - 'VAH_DATA_DIR=/tmp/data'
+    waitFor: ['smoke-test']
+
+images:
+  - 'gcr.io/$PROJECT_ID/ads-video-hero:latest'

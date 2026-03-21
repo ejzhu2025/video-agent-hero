@@ -43,7 +43,7 @@ Rules:
 - Default to 4 scenes/shots for a typical short video; adjust count based on user requirements
 - Each shot duration must be between 0.5 and 2.0 seconds
 - shot_list must have one entry per storyboard scene (S1, S2, … SN)
-- Hook is always scene 1; last scene is typically a CTA or outro unless user specifies otherwise
+- Hook is always scene 1; an outro/CTA is optional — include it only when the user requests it
 - Match brand tone and style
 - duration_sec should equal the sum of all shot durations
 
@@ -62,7 +62,7 @@ CRITICAL — storyboard desc rules:
 - NEVER mention text, captions, logos, watermarks, overlays, written words, taglines, slogans, or any on-screen graphics in desc
 - NEVER use words like: "text appears", "logo shown", "caption", "title card", "CTA", "branded graphic", "overlay", "tagline", "branded cup", "branded bottle", "branding"
 - NEVER use the word "branded" — say "product cup", "product bottle", "the drink" instead
-- Do NOT include any text overlay shots or brand cards — every shot must be a real visual scene
+- Do NOT include any text overlay (text_overlay) shots or brand cards — every shot must be a real visual scene
 - shot_list must correspond 1-to-1 with storyboard scenes — no extra shots, no missing shots
 """
 

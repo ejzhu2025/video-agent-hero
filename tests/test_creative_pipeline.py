@@ -175,10 +175,9 @@ class TestStoryboard:
         assert "storyboard" in plan
         assert plan["project_id"] == "proj001"
 
-    def test_falls_back_to_mock_on_error(self):
-        plan = run_storyboard(MINIMAL_STATE, CONCEPT, "proj001", failing_llm)
-        assert "shot_list" in plan
-        assert len(plan["shot_list"]) > 0
+    def test_raises_on_llm_error(self):
+        with pytest.raises(RuntimeError, match="Storyboard generation failed"):
+            run_storyboard(MINIMAL_STATE, CONCEPT, "proj001", failing_llm)
 
     def test_plan_has_required_top_level_keys(self):
         plan = run_storyboard(MINIMAL_STATE, CONCEPT, "proj001", make_llm(SAMPLE_PLAN))
@@ -366,17 +365,14 @@ class TestCreativePipelineIntegration:
             call_idx[0] += 1
             return json.dumps(resp)
 
-        concept, plan, prompts = run_creative_pipeline(MINIMAL_STATE, "test001", sequenced_llm)
+        concept, plan, prompts, _concept_images = run_creative_pipeline(MINIMAL_STATE, "test001", sequenced_llm)
         assert "hook_angle" in concept
         assert "shot_list" in plan
         assert isinstance(prompts, dict)
 
-    def test_full_pipeline_fallback_mode(self):
-        """All LLM calls fail → mocks kick in, pipeline still produces valid output."""
+    def test_full_pipeline_raises_on_llm_error(self):
+        """All LLM calls fail → pipeline raises RuntimeError (storyboard is required)."""
         from agent.nodes.creative_pipeline import run_creative_pipeline
 
-        concept, plan, prompts = run_creative_pipeline(MINIMAL_STATE, "test002", failing_llm)
-        assert "hook_angle" in concept
-        assert "shot_list" in plan
-        assert len(plan["shot_list"]) > 0
-        assert isinstance(prompts, dict)  # empty {} is fine
+        with pytest.raises(RuntimeError, match="Storyboard generation failed"):
+            run_creative_pipeline(MINIMAL_STATE, "test002", failing_llm)
