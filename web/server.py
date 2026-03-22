@@ -34,6 +34,7 @@ from web.routers.projects import router as projects_router
 from web.routers.scrape import router as scrape_router
 from web.templates import _HTML
 from web.landing import _LANDING_HTML
+from web.legal import PRIVACY_HTML, TERMS_HTML
 
 app = FastAPI(title="Video Agent Hero")
 
@@ -323,6 +324,16 @@ async def serve_video(filename: str):
 @app.get("/", response_class=HTMLResponse)
 async def landing():
     return _LANDING_HTML
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy():
+    return PRIVACY_HTML
+
+
+@app.get("/terms", response_class=HTMLResponse)
+async def terms():
+    return TERMS_HTML
 
 
 @app.get("/app", response_class=HTMLResponse)
