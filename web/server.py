@@ -35,6 +35,7 @@ from web.routers.scrape import router as scrape_router
 from web.templates import _HTML
 from web.landing import _LANDING_HTML
 from web.legal import PRIVACY_HTML, TERMS_HTML
+from web.tiktok import router as tiktok_router
 
 app = FastAPI(title="Video Agent Hero")
 
@@ -61,6 +62,10 @@ app.include_router(billing_router)
 app.include_router(feedback_router)
 app.include_router(projects_router)
 app.include_router(scrape_router)
+app.include_router(tiktok_router)
+
+from starlette.middleware.sessions import SessionMiddleware
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY", "adreel-session-secret"))
 
 
 # ── HTTPS redirect middleware ─────────────────────────────────────────────────

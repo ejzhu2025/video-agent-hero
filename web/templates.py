@@ -202,6 +202,51 @@ _HTML = r"""<!DOCTYPE html>
 </div>
 
 <!-- ── Feedback Modal ─────────────────────────────────────────────────── -->
+<!-- TikTok Post Modal -->
+<div id="tiktok-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+  <div class="card w-full max-w-sm p-5 mx-4">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-2">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.76a4.85 4.85 0 01-1.01-.07z"/></svg>
+        <span class="text-sm font-semibold text-white">Post to TikTok</span>
+      </div>
+      <button onclick="closeTikTokModal()" class="text-gray-500 hover:text-white w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-800">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+
+    <!-- Connect state -->
+    <div id="tt-connect-section">
+      <p class="text-xs text-gray-400 mb-3">Connect your TikTok account to post this ad directly.</p>
+      <button onclick="connectTikTok()" class="w-full py-2 rounded-md text-sm font-semibold text-white flex items-center justify-center gap-2" style="background:#111;border:1px solid #333;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.76a4.85 4.85 0 01-1.01-.07z"/></svg>
+        Connect TikTok Account
+      </button>
+    </div>
+
+    <!-- Post state -->
+    <div id="tt-post-section" class="hidden">
+      <p class="text-xs text-green-400 mb-3 flex items-center gap-1">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="#4ade80" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        TikTok connected
+      </p>
+      <label class="text-xs text-gray-400 block mb-1">Caption</label>
+      <textarea id="tt-caption" rows="3" placeholder="Add a caption with hashtags..."
+        class="w-full bg-gray-900 border border-gray-700 rounded-md text-xs text-white p-2 resize-none focus:outline-none focus:border-gray-500 mb-3"></textarea>
+      <p class="text-xs text-gray-500 mb-3">Video will be posted as private (sandbox mode).</p>
+      <div class="flex gap-2">
+        <button onclick="closeTikTokModal()" class="flex-1 btn-secondary text-xs py-2 rounded-md">Cancel</button>
+        <button onclick="postToTikTok()" id="tt-post-btn" class="flex-1 btn-primary text-xs py-2 rounded-md">Post</button>
+      </div>
+    </div>
+
+    <!-- Result -->
+    <div id="tt-result-section" class="hidden text-center py-2">
+      <p id="tt-result-msg" class="text-sm text-white"></p>
+    </div>
+  </div>
+</div>
+
 <div id="feedback-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60">
   <div class="card w-full max-w-md p-5 mx-4">
     <!-- Header -->
@@ -1913,11 +1958,19 @@ async function loadProjectVideo(projectId) {
       <div class="flex gap-2">
         <a href="${videoUrl}" download="${filename}"
           class="flex-1 flex items-center justify-center gap-1.5 btn-secondary text-xs py-1.5 rounded-md">
-          ⬇ Download
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v7M3 5l3 3 3-3M1 9v1.5A.5.5 0 001.5 11h9a.5.5 0 00.5-.5V9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Download
         </a>
+        <button onclick="openTikTokModal('${filename}')"
+          class="flex items-center justify-center gap-1.5 btn-secondary text-xs py-1.5 px-3 rounded-md hover:text-white"
+          style="color:#fff;background:#111;border-color:#333;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.76a4.85 4.85 0 01-1.01-.07z"/></svg>
+          Post to TikTok
+        </button>
         <button data-rate-btn onclick="openFeedbackModal('${projectId}')"
           class="flex items-center justify-center gap-1 btn-secondary text-xs py-1.5 px-3 rounded-md text-yellow-400 hover:text-yellow-300">
-          ⭐ Rate
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          Rate
         </button>
       </div>`;
     container.appendChild(div);
@@ -2564,6 +2617,72 @@ async function openFeedbackModal(projectId) {
 
 function closeFeedbackModal() {
   document.getElementById('feedback-modal').classList.add('hidden');
+}
+
+// ── TikTok modal ──────────────────────────────────────────────────────────────
+let _ttFilename = '';
+
+async function openTikTokModal(filename) {
+  _ttFilename = filename;
+  document.getElementById('tt-connect-section').classList.remove('hidden');
+  document.getElementById('tt-post-section').classList.add('hidden');
+  document.getElementById('tt-result-section').classList.add('hidden');
+  document.getElementById('tiktok-modal').classList.remove('hidden');
+
+  // Check if already connected
+  try {
+    const r = await fetch('/tiktok/status');
+    const d = await r.json();
+    if (d.connected) showTikTokPostSection();
+  } catch(e) {}
+}
+
+function closeTikTokModal() {
+  document.getElementById('tiktok-modal').classList.add('hidden');
+}
+
+function showTikTokPostSection() {
+  document.getElementById('tt-connect-section').classList.add('hidden');
+  document.getElementById('tt-post-section').classList.remove('hidden');
+}
+
+function connectTikTok() {
+  const w = window.open('/tiktok/auth', 'tiktok_auth', 'width=500,height=650');
+  window.addEventListener('message', function handler(e) {
+    if (e.data === 'tiktok_authed') {
+      window.removeEventListener('message', handler);
+      w && w.close();
+      showTikTokPostSection();
+    }
+  });
+}
+
+async function postToTikTok() {
+  const btn = document.getElementById('tt-post-btn');
+  const caption = document.getElementById('tt-caption').value.trim();
+  btn.disabled = true;
+  btn.textContent = 'Posting...';
+
+  try {
+    const r = await fetch('/tiktok/post', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ filename: _ttFilename, caption }),
+    });
+    const d = await r.json();
+    document.getElementById('tt-post-section').classList.add('hidden');
+    const msg = document.getElementById('tt-result-msg');
+    const res = document.getElementById('tt-result-section');
+    res.classList.remove('hidden');
+    if (d.ok) {
+      msg.innerHTML = '<span style="color:#4ade80">Posted successfully.</span><br><span style="font-size:11px;color:#888">Visible in your TikTok drafts (private mode).</span>';
+    } else {
+      msg.innerHTML = `<span style="color:#f87171">Error: ${d.error}</span>`;
+    }
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'Post';
+  }
 }
 
 function setFeedbackStar(n) {
