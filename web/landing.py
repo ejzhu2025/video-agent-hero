@@ -4,6 +4,8 @@ _LANDING_HTML = r"""<!DOCTYPE html>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>AdReel — AI Video Ads in Minutes</title>
+<link rel="icon" type="image/png" href="/favicon.png"/>
+<link rel="apple-touch-icon" href="/favicon.png"/>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -293,7 +295,7 @@ _LANDING_HTML = r"""<!DOCTYPE html>
 <!-- Nav -->
 <nav>
   <a href="/" class="nav-logo">
-    <span class="w-ad">Ad</span><span class="w-reel">Reel</span>
+    <img src="/logo.png" alt="AdReel" style="height:32px;width:auto;object-fit:contain"/>
   </a>
   <nav class="nav-links">
     <a href="#how" class="nav-link">How it works</a>
@@ -436,7 +438,6 @@ _LANDING_HTML = r"""<!DOCTYPE html>
   </div>
   <div style="display:flex;gap:20px">
     <a href="/app">Open App</a>
-    <a href="https://github.com/ejzhu2025/adreel" target="_blank">GitHub</a>
   </div>
 </footer>
 

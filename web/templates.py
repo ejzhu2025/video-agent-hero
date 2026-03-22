@@ -4,6 +4,8 @@ _HTML = r"""<!DOCTYPE html>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>AdReel</title>
+<link rel="icon" type="image/png" href="/favicon.png"/>
+<link rel="apple-touch-icon" href="/favicon.png"/>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   /* ── Apple-inspired dark mode design system ── */
@@ -99,9 +101,7 @@ _HTML = r"""<!DOCTYPE html>
 </div>
 <header class="flex items-center justify-between px-5 py-3 flex-shrink-0" style="border-bottom:.5px solid rgba(255,255,255,.07);background:rgba(0,0,0,.85);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)">
   <div class="flex items-center">
-    <h1 style="font-size:15px;letter-spacing:-.04em;line-height:1">
-      <span style="font-weight:300;color:rgba(255,255,255,.4)">Ad</span><span style="font-weight:700;color:#fff">Reel</span>
-    </h1>
+    <img src="/logo.png" alt="AdReel" style="height:28px;width:auto;object-fit:contain"/>
   </div>
   <div class="flex gap-2 items-center">
     <button onclick="newVideo()" class="btn-secondary text-xs px-3 py-1.5 rounded-md flex items-center gap-1">

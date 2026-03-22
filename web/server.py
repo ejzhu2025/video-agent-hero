@@ -326,6 +326,24 @@ async def serve_video(filename: str):
 # ── HTML frontend ─────────────────────────────────────────────────────────────
 
 
+_ASSETS_DIR = Path(__file__).parent.parent / "assets"
+
+
+@app.get("/favicon.png")
+async def favicon_png():
+    return FileResponse(_ASSETS_DIR / "adreel_favicon.png", media_type="image/png")
+
+
+@app.get("/favicon.ico")
+async def favicon_ico():
+    return FileResponse(_ASSETS_DIR / "adreel_favicon.png", media_type="image/png")
+
+
+@app.get("/logo.png")
+async def logo_png():
+    return FileResponse(_ASSETS_DIR / "adreel_logo.png", media_type="image/png")
+
+
 @app.get("/", response_class=HTMLResponse)
 async def landing():
     return _LANDING_HTML
