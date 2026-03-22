@@ -142,7 +142,7 @@ def quality_gate(state: dict[str, Any]) -> dict[str, Any]:
     low_relevance_shots: list[str] = []
 
     if scene_clips and plan_storyboard and os.getenv("ANTHROPIC_API_KEY"):
-        relevance_results = _check_shot_relevance(scene_clips, plan_storyboard)
+        relevance_results = _check_shot_relevance(scene_clips, plan_storyboard, relevance_threshold)
         for r in relevance_results:
             if r["score"] < relevance_threshold:
                 low_relevance_shots.append(r["shot_id"])
@@ -249,6 +249,7 @@ def _extract_keyframe_b64(clip_path: str) -> str | None:
 def _check_shot_relevance(
     scene_clips: list[dict],
     storyboard: list[dict],
+    relevance_threshold: int = RELEVANCE_THRESHOLD,
 ) -> list[dict]:
     """Score each shot's generated clip against its storyboard desc using Claude Vision.
 
@@ -310,6 +311,11 @@ def _check_shot_relevance(
                     ],
                 }],
             )
+            try:
+                from web.token_tracker import log_tokens
+                log_tokens("claude-haiku-4-5-20251001", "quality_gate", response.usage)
+            except Exception:
+                pass
             raw = response.content[0].text.strip()
             # Strip markdown fences if present
             raw = raw.strip("```json").strip("```").strip()
@@ -362,6 +368,11 @@ def _check_feedback_compliance(feedback: str, shot_descs: dict[str, str]) -> dic
             max_tokens=128,
             messages=[{"role": "user", "content": prompt}],
         )
+        try:
+            from web.token_tracker import log_tokens
+            log_tokens("claude-haiku-4-5-20251001", "quality_gate", response.usage)
+        except Exception:
+            pass
         raw = response.content[0].text.strip().strip("```json").strip("```").strip()
         data = json.loads(raw)
         return {
